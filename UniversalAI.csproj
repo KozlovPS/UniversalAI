@@ -7,4 +7,24 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Folder Include="Configuration\" />
+    <Folder Include="Telegram\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.33">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.33" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.33">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.14" />
+    <PackageReference Include="Telegram.Bot" Version="22.10.3.3" />
+  </ItemGroup>
+
 </Project>
