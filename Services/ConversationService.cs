@@ -234,7 +234,7 @@ public class ConversationService
             throw new InvalidOperationException("Диалог не найден.");
         }
 
-        conversation.MaxTokens = 1000;
+        conversation.MaxTokens = 10000;
         conversation.Temperature = 0.7;
         conversation.TopP = null;
         conversation.FrequencyPenalty = null;
