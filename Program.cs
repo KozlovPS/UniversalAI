@@ -35,6 +35,22 @@ ConversationService conversationService = new(db);
 int conversationId =
     await conversationService.CreateConversationAsync();
 
+using HttpClient http = new();
+
+ProviderConnectionService providerConnectionService =
+    new(db);
+
+ProviderManager providerManager =
+    new(db, http, gigaOptions);
+
+ConversationEntity? startupConversation =
+    await conversationService.GetConversationAsync(conversationId);
+IAIProvider startupProvider =
+    await providerManager.GetProviderForConversationAsync(conversationId);
+
+Console.WriteLine($"Провайдер: {startupProvider.Name}");
+Console.WriteLine($"Модель: {startupConversation?.Model}");
+
 Console.Write("Название нового диалога (Enter — по умолчанию): ");
 
 string? initialTitle = Console.ReadLine()?.Trim();
@@ -45,14 +61,6 @@ if (!string.IsNullOrWhiteSpace(initialTitle))
         conversationId,
         initialTitle);
 }
-
-using HttpClient http = new();
-
-ProviderConnectionService providerConnectionService =
-    new(db);
-
-ProviderManager providerManager =
-    new(db, http, gigaOptions);
 
 // Загружаем историю
 List<ChatMessage> history =
