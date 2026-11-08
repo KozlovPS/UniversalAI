@@ -2,36 +2,15 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using UniversalAI.Core;
 using UniversalAI.Core.Capabilities;
 using UniversalAI.Providers.OpenAICompatible;
 
-namespace UniversalAI.Benchmark;
+namespace UniversalAI.Benchmarks;
 
-public static class BenchmarkRunner
+public static class Day3PromptingBenchmark
 {
     private const int MaxAnswerTokens = 1024;
-
-    private static readonly Regex AnswerLineRegex = new(
-        @"(?im)^\s*(?:ANSWER|ОТВЕТ)\s*[:：-]\s*(.+?)\s*$",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
-    private static readonly Regex NumberRegex = new(
-        @"[-+]?\d+(?:[.,]\d+)?\s*/\s*\d+(?:[.,]\d+)?|[-+]?\d+(?:[.,]\d+)?\s*%?",
-        RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
-    private static readonly IReadOnlyList<BenchmarkTask> Tasks =
-    [
-        new("arithmetic", "Вычислите: (48 / 6) * (7 + 2).", ["72"]),
-        new("sum", "Чему равна сумма всех целых чисел от 1 до 50 включительно?", ["1275"]),
-        new("sequence", "Продолжите последовательность: 3, 8, 15, 24, 35. Какое число следующее?", ["48"]),
-        new("rectangle", "У прямоугольника длина 10 см, а периметр 34 см. Чему равна ширина в сантиметрах?", ["7"]),
-        new("handshakes", "Четыре человека встретились и каждый один раз пожал руку каждому из остальных. Сколько всего было рукопожатий?", ["6"]),
-        new("combinations", "Сколькими способами можно выбрать 2 разных объекта из 8, если порядок выбора не важен?", ["28"]),
-        new("dice_probability", "Какова вероятность, что сумма значений двух честных шестигранных кубиков равна 7? Дайте точную дробь.", ["1/6", "0.1667", "16.67%"]),
-        new("binary_strings", "Сколько двоичных строк длины 5 не содержат двух единиц подряд?", ["13"])
-    ];
 
     private static readonly IReadOnlyList<BenchmarkStrategy> Strategies =
     [
@@ -41,7 +20,7 @@ public static class BenchmarkRunner
         new("expert_group", "Группа экспертов")
     ];
 
-    public static async Task<int> RunCommandAsync(string[] args)
+    public static async Task<int> RunAsync(string[] args)
     {
         if (args.Any(arg => arg.Equals("--help", StringComparison.OrdinalIgnoreCase) ||
                             arg.Equals("-h", StringComparison.OrdinalIgnoreCase)))
@@ -67,13 +46,14 @@ public static class BenchmarkRunner
 
             using HttpClient http = new() { Timeout = TimeSpan.FromMinutes(3) };
             OpenAICompatibleProvider provider = new(http, options.ProviderOptions);
+            provider.ValidateApiKey();
 
             ValidateEfforts(provider.Name, options.Model, options.LowEffort, options.HighEffort);
 
             Console.WriteLine("Эксперимент по стратегиям промптинга");
             Console.WriteLine($"Провайдер: {provider.Name}");
             Console.WriteLine($"Модель: {options.Model}");
-            Console.WriteLine($"Задач: {Tasks.Count}; запросов планируется примерно: {Tasks.Count * 10}");
+            Console.WriteLine($"Задач: {Day3TaskSet.Tasks.Count}; запросов планируется примерно: {Day3TaskSet.Tasks.Count * 10}");
             Console.WriteLine("Порядок выполнения: все запросы последовательно.");
             Console.WriteLine();
 
@@ -87,9 +67,9 @@ public static class BenchmarkRunner
                          })
                 {
                     List<BenchmarkCaseResult> cases = [];
-                    for (int index = 0; index < Tasks.Count; index++)
+                    for (int index = 0; index < Day3TaskSet.Tasks.Count; index++)
                     {
-                        BenchmarkTask task = Tasks[index];
+                        BenchmarkTask task = Day3TaskSet.Tasks[index];
                         BenchmarkCaseResult result = await RunCaseAsync(
                             provider,
                             options.Model,
@@ -102,7 +82,7 @@ public static class BenchmarkRunner
                             ? "ошибка"
                             : $"{(result.IsCorrect ? "верно" : "неверно")}, {result.TotalTokens} токенов, {result.ElapsedMilliseconds / 1000d:F1} с";
                         Console.WriteLine(
-                            $"[{strategy.Label}; {setting.Label}] {index + 1}/{Tasks.Count} " +
+                            $"[{strategy.Label}; {setting.Label}] {index + 1}/{Day3TaskSet.Tasks.Count} " +
                             $"{task.Id}: {status}");
                     }
 
@@ -115,7 +95,7 @@ public static class BenchmarkRunner
                 provider.Name,
                 options.Model,
                 options.ProviderOptions.BaseUrl,
-                Tasks.Count,
+                Day3TaskSet.Tasks.Count,
                 aggregates);
 
             string csvPath = Path.GetFullPath(options.OutputPath);
@@ -145,7 +125,7 @@ public static class BenchmarkRunner
         catch (Exception ex)
         {
             Console.Error.WriteLine($"Не удалось запустить эксперимент: {ex.Message}");
-            Console.Error.WriteLine("Справка: dotnet run -- --benchmark --help");
+            Console.Error.WriteLine("Справка: dotnet run -- --benchmark day3 --help");
             return 1;
         }
     }
@@ -156,7 +136,7 @@ public static class BenchmarkRunner
     {
         string model = defaults.DefaultModel;
         string? highEffort = null;
-        string output = "benchmark-results.csv";
+        string output = "benchmark-results-Day-3.csv";
 
         for (int index = 0; index < args.Length; index++)
         {
@@ -238,6 +218,8 @@ public static class BenchmarkRunner
     {
         Stopwatch stopwatch = Stopwatch.StartNew();
         int tokens = 0;
+        int promptTokens = 0;
+        int completionTokens = 0;
         int apiCalls = 0;
         string? generatedPrompt = null;
         string rawAnswer = "";
@@ -256,6 +238,8 @@ public static class BenchmarkRunner
             });
 
             apiCalls++;
+            promptTokens += result.PromptTokens;
+            completionTokens += result.CompletionTokens;
             tokens += result.TotalTokens > 0
                 ? result.TotalTokens
                 : result.PromptTokens + result.CompletionTokens;
@@ -297,14 +281,14 @@ public static class BenchmarkRunner
                     throw new InvalidOperationException($"Неизвестная стратегия: {strategy.Id}");
             }
 
-            extractedAnswers = ExtractAnswers(rawAnswer);
+            extractedAnswers = BenchmarkAnswerScorer.ExtractAnswers(rawAnswer);
             if (extractedAnswers.Count == 0)
             {
-                extractedAnswers = ExtractFinalNumericValues(rawAnswer, 1);
+                extractedAnswers = BenchmarkAnswerScorer.ExtractFinalNumericValues(rawAnswer, 1);
             }
 
             correctExpertAnswers = extractedAnswers.Count(
-                answer => IsExpectedAnswer(answer, task.ExpectedAnswers));
+                answer => BenchmarkAnswerScorer.IsExpectedAnswer(answer, task.ExpectedAnswers));
         }
         catch (Exception ex)
         {
@@ -317,7 +301,7 @@ public static class BenchmarkRunner
 
         bool isCorrect = strategy.Id == "expert_group" && extractedAnswers.Count > 1
             ? correctExpertAnswers > extractedAnswers.Count / 2
-            : extractedAnswers.Any(answer => IsExpectedAnswer(answer, task.ExpectedAnswers));
+            : extractedAnswers.Any(answer => BenchmarkAnswerScorer.IsExpectedAnswer(answer, task.ExpectedAnswers));
 
         return new BenchmarkCaseResult(
             task.Id,
@@ -327,77 +311,13 @@ public static class BenchmarkRunner
             correctExpertAnswers,
             extractedAnswers,
             tokens,
+            promptTokens,
+            completionTokens,
             apiCalls,
             stopwatch.ElapsedMilliseconds,
             generatedPrompt,
             rawAnswer,
             error);
-    }
-
-    private static List<string> ExtractAnswers(string content)
-    {
-        MatchCollection matches = AnswerLineRegex.Matches(content);
-        List<string> answers = [];
-        foreach (Match match in matches)
-        {
-            answers.AddRange(ExtractFinalNumericValues(match.Groups[1].Value, 1));
-        }
-
-        return answers;
-    }
-
-    private static List<string> ExtractFinalNumericValues(string content, int maxValues)
-    {
-        MatchCollection matches = NumberRegex.Matches(content);
-        if (matches.Count == 0)
-        {
-            return [];
-        }
-
-        int startIndex = Math.Max(0, matches.Count - maxValues);
-        return matches
-            .Skip(startIndex)
-            .Select(match => Regex.Replace(match.Value.Trim(), @"\s+", ""))
-            .ToList();
-    }
-
-    private static bool IsExpectedAnswer(
-        string answer,
-        IReadOnlyList<string> expectedAnswers)
-    {
-        return TryParseNumericAnswer(answer, out decimal actual) && expectedAnswers.Any(expected =>
-            TryParseNumericAnswer(expected, out decimal parsedExpected) &&
-            Math.Abs(actual - parsedExpected) <= 0.0005m);
-    }
-
-    private static bool TryParseNumericAnswer(string answer, out decimal value)
-    {
-        string normalized = answer.Trim().Replace(',', '.');
-        bool isPercent = normalized.EndsWith('%');
-        if (isPercent)
-        {
-            normalized = normalized[..^1];
-        }
-
-        string[] fraction = normalized.Split('/');
-        if (fraction.Length == 2 &&
-            decimal.TryParse(fraction[0], NumberStyles.Number, CultureInfo.InvariantCulture, out decimal numerator) &&
-            decimal.TryParse(fraction[1], NumberStyles.Number, CultureInfo.InvariantCulture, out decimal denominator) &&
-            denominator != 0)
-        {
-            value = numerator / denominator;
-        }
-        else if (!decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out value))
-        {
-            return false;
-        }
-
-        if (isPercent)
-        {
-            value /= 100m;
-        }
-
-        return true;
     }
 
     private static string BuildCsv(BenchmarkReport report)
@@ -423,7 +343,7 @@ public static class BenchmarkRunner
     private static string BuildMarkdown(BenchmarkReport report)
     {
         StringBuilder markdown = new();
-        markdown.AppendLine($"## Результаты эксперимента: {report.Provider}, {report.Model}");
+        markdown.AppendLine($"## Day-3: приёмы промптинга и reasoning — {report.Provider}, {report.Model}");
         markdown.AppendLine();
         markdown.AppendLine("| Способ | Рассуждение | Верно | Токены | Время, с | Запросы | Ошибки |");
         markdown.AppendLine("|---|---|---:|---:|---:|---:|---:|");
@@ -506,7 +426,7 @@ public static class BenchmarkRunner
     {
         Console.WriteLine("""
             Запуск эксперимента:
-              dotnet run -- --benchmark [параметры]
+              dotnet run -- --benchmark day3 [параметры]
 
             Параметры:
               --provider ИМЯ       имя OpenAI-совместимого провайдера (по умолчанию ProxyAPI)
@@ -514,7 +434,7 @@ public static class BenchmarkRunner
               --base-url URL       базовый URL API
               --api-key-env ИМЯ    переменная окружения с API-ключом
               --high-effort УРОВЕНЬ уровень максимального рассуждения; по умолчанию max для DeepSeek V4.1 Flash / GPT-6 Luna, иначе high
-              --output ПУТЬ        CSV-файл (по умолчанию benchmark-results.csv); рядом создаются .md и .json
+              --output ПУТЬ        CSV-файл (по умолчанию benchmark-results-Day-3.csv); рядом создаются .md и .json
               --help               эта справка
 
             Нужно заранее задать переменную окружения API-ключа, например PROXYAPI_API_KEY.
@@ -531,8 +451,6 @@ public static class BenchmarkRunner
 
     private sealed record BenchmarkStrategy(string Id, string Label);
     private sealed record ReasoningSetting(string Label, string ApiEffort);
-    private sealed record BenchmarkTask(string Id, string Question, IReadOnlyList<string> ExpectedAnswers);
-
     private sealed record BenchmarkCaseResult(
         string TaskId,
         string Question,
@@ -541,6 +459,8 @@ public static class BenchmarkRunner
         int CorrectExpertAnswers,
         IReadOnlyList<string> ExtractedAnswers,
         int TotalTokens,
+        int PromptTokens,
+        int CompletionTokens,
         int ApiCalls,
         long ElapsedMilliseconds,
         string? GeneratedPrompt,

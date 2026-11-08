@@ -11,9 +11,17 @@ using UniversalAI.Services.Providers;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
-if (args.Length > 0 && args[0].Equals("--benchmark", StringComparison.OrdinalIgnoreCase))
+if (args.Length > 0 && args[0].StartsWith("--benchmark", StringComparison.OrdinalIgnoreCase))
 {
-    int exitCode = await UniversalAI.Benchmark.BenchmarkRunner.RunCommandAsync(args[1..]);
+    string[] benchmarkArgs = args[0].Equals("--benchmark", StringComparison.OrdinalIgnoreCase)
+        ? args[1..]
+        : args[0].StartsWith("--benchmark-day", StringComparison.OrdinalIgnoreCase)
+            ? new[] { args[0]["--benchmark-".Length..] }
+            .Concat(args[1..])
+            .ToArray()
+            : args;
+
+    int exitCode = await UniversalAI.Benchmarks.BenchmarkCommand.RunAsync(benchmarkArgs);
     Environment.ExitCode = exitCode;
     return;
 }

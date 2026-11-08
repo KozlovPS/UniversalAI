@@ -62,11 +62,27 @@ public class OpenAICompatibleProvider : IAIProvider
         string? key = Environment.GetEnvironmentVariable(
             variableName);
 
-        return string.IsNullOrWhiteSpace(key)
-            ? throw new InvalidOperationException(
-                $"Не найдена переменная окружения {variableName}.")
-            : key;
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            throw new InvalidOperationException(
+                $"Не найдена переменная окружения {variableName}.");
+        }
+
+        if (key.Any(character =>
+                !char.IsAscii(character) ||
+                char.IsControl(character) ||
+                char.IsWhiteSpace(character)))
+        {
+            throw new InvalidOperationException(
+                $"Переменная окружения {variableName} содержит недопустимые " +
+                "символы. API-ключ должен быть ASCII без пробелов; " +
+                "проверьте значение, оно не выводится в лог.");
+        }
+
+        return key;
     }
+
+    public void ValidateApiKey() => _ = GetApiKey();
 
     public async Task<ChatResult> SendMessageAsync(
         ChatRequest request,

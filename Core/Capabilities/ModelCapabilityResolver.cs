@@ -28,6 +28,25 @@ public static class ModelCapabilityResolver
             };
         }
 
+        if (id is "gpt-6-sol" or "openai/gpt-6-sol" or
+            "gpt-6-astra" or "openai/gpt-6-astra")
+        {
+            return new ModelCapabilities
+            {
+                SupportsTemperature = false,
+                SupportsTopP = false,
+                SupportsFrequencyPenalty = false,
+                SupportsPresencePenalty = false,
+                SupportsSeed = false,
+
+                SupportsReasoningEffort = true,
+                SupportsReasoningBudgetTokens = false,
+
+                TokenLimitParameter =
+                    TokenLimitParameter.MaxCompletionTokens
+            };
+        }
+
 
         if (id == "deepseek/deepseek-v4.1-flash")
         {
