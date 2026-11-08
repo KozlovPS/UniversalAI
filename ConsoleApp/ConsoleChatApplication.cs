@@ -1,0 +1,122 @@
+using UniversalAI.Data.Entities;
+using UniversalAI.Providers;
+using UniversalAI.Services;
+using UniversalAI.Services.Providers;
+
+namespace UniversalAI.ConsoleApp;
+
+public sealed class ConsoleChatApplication
+{
+    private readonly ConversationService _conversations;
+    private readonly ProviderManager _providers;
+    private readonly ChatService _chat;
+    private readonly ConsoleCommandRouter _commands;
+
+    public ConsoleChatApplication(
+        ConversationService conversations,
+        ProviderManager providers,
+        ChatService chat,
+        ConsoleCommandRouter commands)
+    {
+        _conversations = conversations;
+        _providers = providers;
+        _chat = chat;
+        _commands = commands;
+    }
+
+    public async Task RunAsync(CancellationToken cancellationToken = default)
+    {
+        Console.WriteLine("================================");
+        Console.WriteLine("       UniversalAI");
+        Console.WriteLine("================================");
+
+        ConsoleChatSession session = new()
+        {
+            ConversationId = await _conversations.CreateConversationAsync(cancellationToken)
+        };
+
+        ConversationEntity? conversation =
+            await _conversations.GetConversationAsync(session.ConversationId);
+        IAIProvider provider =
+            await _providers.GetProviderForConversationAsync(session.ConversationId, cancellationToken);
+
+        Console.WriteLine($"Провайдер: {provider.Name}");
+        Console.WriteLine($"Модель: {conversation?.Model}");
+        Console.Write("Название нового диалога (Enter — по умолчанию): ");
+
+        string? title = Console.ReadLine()?.Trim();
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            await _conversations.RenameConversationAsync(session.ConversationId, title);
+        }
+
+        Console.WriteLine($"\nID диалога: {session.ConversationId}");
+        Console.WriteLine("\nДля просмотра списка команд введите /help.");
+
+        while (!session.ShouldExit && !cancellationToken.IsCancellationRequested)
+        {
+            Console.Write("\n> ");
+            string? input = Console.ReadLine();
+            if (input == null)
+            {
+                session.ShouldExit = true;
+                continue;
+            }
+
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                continue;
+            }
+
+            if (input.Equals("/exit", StringComparison.OrdinalIgnoreCase))
+            {
+                session.ShouldExit = true;
+                continue;
+            }
+
+            if (await _commands.TryHandleAsync(input, session, cancellationToken))
+            {
+                continue;
+            }
+
+            await SendChatMessageAsync(input, session.ConversationId, cancellationToken);
+        }
+
+        Console.WriteLine("\nРабота завершена.");
+    }
+
+    private async Task SendChatMessageAsync(
+        string input,
+        int conversationId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            ChatTurnResult turn = await _chat.SendMessageAsync(
+                conversationId,
+                input,
+                cancellationToken);
+
+            Console.WriteLine("\nОтвет модели:");
+            Console.WriteLine(turn.Response.Content);
+            Console.WriteLine("\n--- Статистика ---");
+            Console.WriteLine($"Провайдер: {turn.ProviderName}");
+            Console.WriteLine($"Модель: {turn.Request.Model}");
+            Console.WriteLine($"Finish reason: {turn.Response.FinishReason}");
+            Console.WriteLine($"Prompt tokens: {turn.Response.PromptTokens}");
+            Console.WriteLine($"Completion tokens: {turn.Response.CompletionTokens}");
+            Console.WriteLine($"Total tokens: {turn.Response.TotalTokens}");
+        }
+        catch (NotSupportedException ex)
+        {
+            Console.WriteLine("\nНастройка не поддерживается:");
+            Console.WriteLine(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("\nОшибка при обращении к AI:");
+            Console.WriteLine(ex.Message);
+            Console.WriteLine("Сообщение не сохранено.");
+        }
+    }
+}
