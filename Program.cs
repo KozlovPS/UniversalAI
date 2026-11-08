@@ -11,6 +11,13 @@ using UniversalAI.Services.Providers;
 
 Console.OutputEncoding = System.Text.Encoding.UTF8;
 
+if (args.Length > 0 && args[0].Equals("--benchmark", StringComparison.OrdinalIgnoreCase))
+{
+    int exitCode = await UniversalAI.Benchmark.BenchmarkRunner.RunCommandAsync(args[1..]);
+    Environment.ExitCode = exitCode;
+    return;
+}
+
 Console.WriteLine("================================");
 Console.WriteLine("       UniversalAI");
 Console.WriteLine("================================");
