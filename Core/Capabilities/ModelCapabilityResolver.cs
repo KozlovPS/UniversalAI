@@ -10,6 +10,24 @@ public static class ModelCapabilityResolver
         string id = model.Trim().ToLowerInvariant();
 
 
+        if (id == "anthropic/claude-opus-5-5")
+        {
+            return new ModelCapabilities
+            {
+                SupportsTemperature = false,
+                SupportsTopP = false,
+                SupportsFrequencyPenalty = false,
+                SupportsPresencePenalty = false,
+                SupportsSeed = false,
+
+                SupportsReasoningEffort = true,
+                SupportsReasoningBudgetTokens = false,
+
+                TokenLimitParameter = TokenLimitParameter.MaxTokens
+            };
+        }
+
+
         if (id is "gpt-6-luna" or "openai/gpt-6-luna")
         {
             return new ModelCapabilities

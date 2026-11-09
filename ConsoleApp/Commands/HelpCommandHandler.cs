@@ -61,6 +61,9 @@ public sealed class HelpCommandHandler : IConsoleCommandHandler
               /exit                   Завершить работу
 
             Примеры:
+              /provider ProxyAPI
+              /model anthropic/claude-opus-5-5
+              /reasoning high
               /model GigaChat-2
               /temperature 0.5
               /max_tokens 4096
