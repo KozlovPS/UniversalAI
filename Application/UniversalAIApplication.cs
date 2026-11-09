@@ -32,16 +32,22 @@ public static class UniversalAIApplication
                 .Options;
 
         await using AppDbContext db = new(dbOptions);
-        await db.Database.EnsureCreatedAsync();
+        await DatabaseInitializer.InitializeAsync(db);
         using HttpClient http = new();
 
         ConversationService conversations = new(db);
         ProviderConnectionService providerConnections = new(db);
         ProviderManager providers = new(db, http, gigaOptions);
-        ToolCallingAgent agent = new(
+        ToolCallingAgent toolCallingAgent = new(
             conversations,
             providers,
             new AgentToolRegistry());
+        ChatService chat = new(conversations, providers);
+        AgentRegistry agents = new(
+        [
+            toolCallingAgent,
+            new DirectChatAgent(chat)
+        ]);
 
         ConsoleCommandRouter commands = new(
         [
@@ -53,11 +59,12 @@ public static class UniversalAIApplication
                 gigaOptions,
                 proxyOptions),
             new HelpCommandHandler(),
+            new AgentCommandHandler(agents, conversations),
             new ConversationCommandHandler(conversations),
             new GenerationSettingsCommandHandler(conversations, providers)
         ]);
 
-        ConsoleChatApplication console = new(conversations, providers, agent, commands);
+        ConsoleChatApplication console = new(conversations, providers, agents, commands);
         await console.RunAsync();
         return 0;
     }

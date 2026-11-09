@@ -280,6 +280,31 @@ public class ConversationService
         await _db.SaveChangesAsync();
     }
 
+    public async Task SetAgentIdAsync(
+        int conversationId,
+        string agentId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(agentId))
+        {
+            throw new ArgumentException("Не указан ID агента.", nameof(agentId));
+        }
+
+        ConversationEntity? conversation = await _db.Conversations
+            .FirstOrDefaultAsync(
+                c => c.Id == conversationId,
+                cancellationToken);
+
+        if (conversation == null)
+        {
+            throw new InvalidOperationException("Диалог не найден.");
+        }
+
+        conversation.AgentId = agentId;
+        conversation.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task RenameConversationAsync(
     int conversationId,
     string title)

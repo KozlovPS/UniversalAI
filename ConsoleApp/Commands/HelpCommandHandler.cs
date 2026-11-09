@@ -44,6 +44,11 @@ public sealed class HelpCommandHandler : IConsoleCommandHandler
               /provider ProxyAPI     Выбрать ProxyAPI и его модель по умолчанию
               /models                Получить список моделей
 
+            АГЕНТЫ:
+              /agent                 Показать текущий и доступные агенты
+              /agent tools           Выбрать агента с инструментами
+              /agent direct          Выбрать прямой чат без инструментов
+
             REASONING:
               /reasoning              Показать текущий режим
               /reasoning low          Установить низкий уровень

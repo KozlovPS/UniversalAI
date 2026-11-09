@@ -71,6 +71,7 @@ public sealed class ConversationCommandHandler : IConsoleCommandHandler
         {
             Console.WriteLine(
                 $"ID: {conversation.Id} | {conversation.Title} | " +
+                $"Агент: {conversation.AgentId} | " +
                 $"{conversation.UpdatedAt.ToLocalTime():dd.MM.yyyy HH:mm}");
         }
     }
@@ -102,9 +103,11 @@ public sealed class ConversationCommandHandler : IConsoleCommandHandler
 
         ConversationEntity? conversation =
             await _conversations.GetConversationAsync(session.ConversationId);
+        session.AgentId = conversation?.AgentId ?? session.AgentId;
 
         Console.WriteLine($"\nСоздан диалог ID: {session.ConversationId}");
         Console.WriteLine($"Название: {conversation?.Title}");
+        Console.WriteLine($"Агент: {session.AgentId}");
     }
 
     private async Task RenameConversationAsync(string input, int conversationId)
@@ -152,10 +155,12 @@ public sealed class ConversationCommandHandler : IConsoleCommandHandler
             await _conversations.GetMessagesAsync(requestedId, cancellationToken);
         ConversationEntity? conversation =
             await _conversations.GetConversationAsync(requestedId);
+        session.AgentId = conversation?.AgentId ?? session.AgentId;
 
         Console.WriteLine("\nДиалог открыт");
         Console.WriteLine($"ID: {requestedId}");
         Console.WriteLine($"Название: {conversation?.Title ?? "Без названия"}");
+        Console.WriteLine($"Агент: {session.AgentId}");
         Console.WriteLine($"Загружено сообщений: {history.Count}");
     }
 }

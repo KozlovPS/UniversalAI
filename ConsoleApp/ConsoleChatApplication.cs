@@ -10,18 +10,18 @@ public sealed class ConsoleChatApplication
 {
     private readonly ConversationService _conversations;
     private readonly ProviderManager _providers;
-    private readonly ToolCallingAgent _agent;
+    private readonly AgentRegistry _agents;
     private readonly ConsoleCommandRouter _commands;
 
     public ConsoleChatApplication(
         ConversationService conversations,
         ProviderManager providers,
-        ToolCallingAgent agent,
+        AgentRegistry agents,
         ConsoleCommandRouter commands)
     {
         _conversations = conversations;
         _providers = providers;
-        _agent = agent;
+        _agents = agents;
         _commands = commands;
     }
 
@@ -33,7 +33,8 @@ public sealed class ConsoleChatApplication
 
         ConsoleChatSession session = new()
         {
-            ConversationId = await _conversations.CreateConversationAsync(cancellationToken)
+            ConversationId = await _conversations.CreateConversationAsync(cancellationToken),
+            AgentId = _agents.DefaultAgentId
         };
 
         ConversationEntity? conversation =
@@ -43,6 +44,7 @@ public sealed class ConsoleChatApplication
 
         Console.WriteLine($"Провайдер: {provider.Name}");
         Console.WriteLine($"Модель: {conversation?.Model}");
+        Console.WriteLine($"Агент: {_agents.Get(session.AgentId).DisplayName}");
         Console.Write("Название нового диалога (Enter — по умолчанию): ");
 
         string? title = Console.ReadLine()?.Trim();
@@ -80,7 +82,11 @@ public sealed class ConsoleChatApplication
                 continue;
             }
 
-            await SendChatMessageAsync(input, session.ConversationId, cancellationToken);
+            await SendChatMessageAsync(
+                input,
+                session.ConversationId,
+                _agents.Get(session.AgentId),
+                cancellationToken);
         }
 
         Console.WriteLine("\nРабота завершена.");
@@ -89,18 +95,21 @@ public sealed class ConsoleChatApplication
     private async Task SendChatMessageAsync(
         string input,
         int conversationId,
+        IAgent agent,
         CancellationToken cancellationToken)
     {
         try
         {
-            AgentTurnResult turn = await _agent.RunAsync(
+            AgentTurnResult turn = await agent.RunAsync(
                 conversationId,
                 input,
                 cancellationToken);
 
             Console.WriteLine("\nОтвет модели:");
             Console.WriteLine(turn.Response.Content);
+            WriteAgentTrace(turn.ModelCalls);
             Console.WriteLine("\n--- Статистика ---");
+            Console.WriteLine($"Агент: {agent.DisplayName}");
             Console.WriteLine($"Провайдер: {turn.ProviderName}");
             Console.WriteLine($"Модель: {turn.Model}");
             Console.WriteLine($"Finish reason: {turn.Response.FinishReason}");
@@ -120,5 +129,43 @@ public sealed class ConsoleChatApplication
             Console.WriteLine(ex.Message);
             Console.WriteLine("Сообщение не сохранено.");
         }
+    }
+
+    private static void WriteAgentTrace(
+        IReadOnlyList<AgentModelCallTrace> modelCalls)
+    {
+        Console.WriteLine("\n--- Ходы агента ---");
+        foreach (AgentModelCallTrace modelCall in modelCalls)
+        {
+            Console.WriteLine(
+                $"Запрос к модели #{modelCall.Number}: " +
+                $"finish={modelCall.FinishReason}, " +
+                $"токены={modelCall.TotalTokens} " +
+                $"(вход {modelCall.PromptTokens}, выход {modelCall.CompletionTokens})");
+
+            if (modelCall.ToolCalls.Count == 0)
+            {
+                Console.WriteLine("  Модель сформировала финальный ответ.");
+                continue;
+            }
+
+            foreach (AgentToolCallTrace toolCall in modelCall.ToolCalls)
+            {
+                Console.WriteLine(
+                    $"  Инструмент: {toolCall.Name}({FormatTraceValue(toolCall.Arguments)})");
+                Console.WriteLine($"  Результат: {FormatTraceValue(toolCall.Result)}");
+            }
+        }
+    }
+
+    private static string FormatTraceValue(string value)
+    {
+        string singleLine = value
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal);
+        const int maximumLength = 500;
+        return singleLine.Length <= maximumLength
+            ? singleLine
+            : singleLine[..maximumLength] + "…";
     }
 }

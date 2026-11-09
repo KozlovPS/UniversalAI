@@ -28,6 +28,8 @@ public class ConversationEntity
 
     public string Model { get; set; } = "GigaChat-2";
 
+    public string AgentId { get; set; } = "tools";
+
     public double Temperature { get; set; } = 0.7;
 
     public int Id { get; set; }

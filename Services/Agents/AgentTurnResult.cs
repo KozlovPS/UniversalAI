@@ -6,4 +6,5 @@ public sealed record AgentTurnResult(
     string ProviderName,
     string Model,
     ChatResult Response,
-    int ToolRounds);
+    int ToolRounds,
+    IReadOnlyList<AgentModelCallTrace> ModelCalls);

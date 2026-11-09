@@ -6,9 +6,11 @@ using UniversalAI.Services.Providers;
 namespace UniversalAI.Services.Agents;
 
 /// <summary>Runs the model/tool/model loop for one user message.</summary>
-public sealed class ToolCallingAgent
+public sealed class ToolCallingAgent : IAgent
 {
     private const int MaxToolRounds = 8;
+
+    public const string AgentId = "tools";
 
     private readonly ConversationService _conversations;
     private readonly IProviderResolver _providers;
@@ -23,6 +25,12 @@ public sealed class ToolCallingAgent
         _providers = providers;
         _tools = tools;
     }
+
+    public string Id => AgentId;
+
+    public string DisplayName => "Агент с инструментами";
+
+    public string Description => "Сам выбирает время, калькулятор или бросок кубика.";
 
     public async Task<AgentTurnResult> RunAsync(
         int conversationId,
@@ -68,6 +76,7 @@ public sealed class ToolCallingAgent
         int promptTokens = 0;
         int completionTokens = 0;
         int totalTokens = 0;
+        List<AgentModelCallTrace> modelCalls = [];
 
         while (true)
         {
@@ -113,6 +122,14 @@ public sealed class ToolCallingAgent
                     TotalTokens = totalTokens
                 };
 
+                modelCalls.Add(new AgentModelCallTrace(
+                    modelCalls.Count + 1,
+                    response.FinishReason,
+                    response.PromptTokens,
+                    response.CompletionTokens,
+                    response.TotalTokens,
+                    []));
+
                 await _conversations.SaveMessageAsync(
                     conversationId,
                     userMessage,
@@ -130,7 +147,8 @@ public sealed class ToolCallingAgent
                     provider.Name,
                     conversation.Model,
                     finalResponse,
-                    toolRounds);
+                    toolRounds,
+                    modelCalls);
             }
 
             if (toolRounds >= MaxToolRounds)
@@ -148,11 +166,17 @@ public sealed class ToolCallingAgent
                 FunctionsStateId = response.FunctionsStateId
             });
 
+            List<AgentToolCallTrace> toolCallTraces = [];
             foreach (ChatToolCall toolCall in response.ToolCalls)
             {
                 string toolOutput = _tools.Execute(
                     toolCall.Function.Name,
                     toolCall.Function.Arguments);
+
+                toolCallTraces.Add(new AgentToolCallTrace(
+                    toolCall.Function.Name,
+                    toolCall.Function.Arguments,
+                    toolOutput));
 
                 messages.Add(new ChatMessage
                 {
@@ -162,6 +186,14 @@ public sealed class ToolCallingAgent
                     Content = toolOutput
                 });
             }
+
+            modelCalls.Add(new AgentModelCallTrace(
+                modelCalls.Count + 1,
+                response.FinishReason,
+                response.PromptTokens,
+                response.CompletionTokens,
+                response.TotalTokens,
+                toolCallTraces));
         }
     }
 }
