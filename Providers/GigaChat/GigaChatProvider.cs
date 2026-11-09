@@ -35,7 +35,8 @@ public class GigaChatProvider : IAIProvider
         SupportsReasoningBudgetTokens = false,
 
         SupportsJsonSchema = true,
-        SupportsStreaming = false
+        SupportsStreaming = false,
+        SupportsFunctionCalling = true
     };
 
     private const string TokenUrl =
@@ -97,7 +98,9 @@ public class GigaChatProvider : IAIProvider
                 ? _options.DefaultModel
                 : request.Model,
 
-            Messages = request.Messages,
+            Messages = request.Messages.Select(ToGigaChatMessage).ToList(),
+            Functions = request.Tools.Count == 0 ? null : request.Tools,
+            FunctionCall = request.Tools.Count == 0 ? null : "auto",
 
             MaxTokens = request.MaxTokens,
 
@@ -148,6 +151,25 @@ public class GigaChatProvider : IAIProvider
         JsonElement message = choice
             .GetProperty("message");
 
+        List<ChatToolCall> toolCalls = [];
+        if (message.TryGetProperty("function_call", out JsonElement functionCall) &&
+            functionCall.ValueKind == JsonValueKind.Object)
+        {
+            string functionName = GetString(functionCall, "name");
+            if (!string.IsNullOrWhiteSpace(functionName))
+            {
+                toolCalls.Add(new ChatToolCall
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Function = new ChatFunctionCall
+                    {
+                        Name = functionName,
+                        Arguments = GetJsonString(functionCall, "arguments", "{}")
+                    }
+                });
+            }
+        }
+
         JsonElement usage = root
             .GetProperty("usage");
 
@@ -155,7 +177,13 @@ public class GigaChatProvider : IAIProvider
         {
             Content = message
                 .GetProperty("content")
-                .GetString() ?? "",
+                .ValueKind == JsonValueKind.String
+                    ? message.GetProperty("content").GetString() ?? ""
+                    : "",
+
+            ToolCalls = toolCalls,
+
+            FunctionsStateId = GetNullableString(message, "functions_state_id"),
 
             FinishReason = GetString(
                 choice,
@@ -274,6 +302,17 @@ public class GigaChatProvider : IAIProvider
             : "unknown";
     }
 
+    private static string? GetNullableString(
+        JsonElement element,
+        string property)
+    {
+        return element.ValueKind == JsonValueKind.Object &&
+               element.TryGetProperty(property, out JsonElement value) &&
+               value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+    }
+
     private static int GetInt(
         JsonElement element,
         string property)
@@ -282,6 +321,50 @@ public class GigaChatProvider : IAIProvider
             value.TryGetInt32(out int result)
             ? result
             : 0;
+    }
+
+    private static string GetJsonString(
+        JsonElement element,
+        string property,
+        string fallback)
+    {
+        return element.ValueKind == JsonValueKind.Object &&
+               element.TryGetProperty(property, out JsonElement value)
+            ? value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? fallback
+                : value.GetRawText()
+            : fallback;
+    }
+
+    private static GigaChatMessage ToGigaChatMessage(ChatMessage message)
+    {
+        GigaChatMessage result = new()
+        {
+            Role = message.Role == "tool" ? "function" : message.Role,
+            Content = message.Content,
+            FunctionName = message.Role == "tool" ? message.FunctionName : null,
+            FunctionsStateId = message.FunctionsStateId
+        };
+
+        if (message.ToolCalls is { Count: > 0 })
+        {
+            if (message.ToolCalls.Count > 1)
+            {
+                throw new NotSupportedException(
+                    "GigaChat API в текущей версии провайдера поддерживает " +
+                    "только один вызов функции за один ответ модели.");
+            }
+
+            ChatFunctionCall function = message.ToolCalls[0].Function;
+            using JsonDocument arguments = JsonDocument.Parse(function.Arguments);
+            result.FunctionCall = new GigaChatFunctionCall
+            {
+                Name = function.Name,
+                Arguments = arguments.RootElement.Clone()
+            };
+        }
+
+        return result;
     }
 
     private void ValidateRequest(ChatRequest request)
@@ -359,7 +442,13 @@ public class GigaChatProvider : IAIProvider
         public string Model { get; set; } = "";
 
         [JsonPropertyName("messages")]
-        public List<ChatMessage> Messages { get; set; } = [];
+        public List<GigaChatMessage> Messages { get; set; } = [];
+
+        [JsonPropertyName("functions")]
+        public List<ChatFunctionDefinition>? Functions { get; set; }
+
+        [JsonPropertyName("function_call")]
+        public string? FunctionCall { get; set; }
 
         [JsonPropertyName("max_tokens")]
         public int? MaxTokens { get; set; }
@@ -369,5 +458,32 @@ public class GigaChatProvider : IAIProvider
 
         [JsonPropertyName("response_format")]
         public JsonElement? ResponseFormat { get; set; }
+    }
+
+    private sealed class GigaChatMessage
+    {
+        [JsonPropertyName("role")]
+        public string Role { get; set; } = "";
+
+        [JsonPropertyName("content")]
+        public string Content { get; set; } = "";
+
+        [JsonPropertyName("function_call")]
+        public GigaChatFunctionCall? FunctionCall { get; set; }
+
+        [JsonPropertyName("function_name")]
+        public string? FunctionName { get; set; }
+
+        [JsonPropertyName("functions_state_id")]
+        public string? FunctionsStateId { get; set; }
+    }
+
+    private sealed class GigaChatFunctionCall
+    {
+        [JsonPropertyName("name")]
+        public string Name { get; set; } = "";
+
+        [JsonPropertyName("arguments")]
+        public JsonElement Arguments { get; set; }
     }
 }

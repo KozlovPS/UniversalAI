@@ -9,6 +9,8 @@ public class ChatRequest
 
     public List<ChatMessage> Messages { get; set; } = [];
 
+    public List<ChatFunctionDefinition> Tools { get; set; } = [];
+
     public int? MaxTokens { get; set; }
 
     public double? Temperature { get; set; }

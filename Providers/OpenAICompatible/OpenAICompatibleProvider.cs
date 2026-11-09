@@ -26,7 +26,8 @@ public class OpenAICompatibleProvider : IAIProvider
         SupportsReasoningEffort = true,
         SupportsReasoningBudgetTokens = false,
         SupportsJsonSchema = false,
-        SupportsStreaming = false
+        SupportsStreaming = false,
+        SupportsFunctionCalling = true
     };
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -124,7 +125,14 @@ public class OpenAICompatibleProvider : IAIProvider
         OpenAICompatibleRequest body = new()
         {
             Model = model,
-            Messages = request.Messages,
+            Messages = request.Messages.Select(ToOpenAIMessage).ToList(),
+            Tools = request.Tools.Count == 0
+                ? null
+                : request.Tools.Select(tool => new OpenAICompatibleTool
+                {
+                    Function = tool
+                }).ToList(),
+            ToolChoice = request.Tools.Count == 0 ? null : "auto",
 
             MaxTokens =
                 capabilities.TokenLimitParameter ==
@@ -214,6 +222,32 @@ public class OpenAICompatibleProvider : IAIProvider
         JsonElement choice = root.GetProperty("choices")[0];
         JsonElement message = choice.GetProperty("message");
 
+        List<ChatToolCall> toolCalls = [];
+        if (message.TryGetProperty("tool_calls", out JsonElement callsElement) &&
+            callsElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (JsonElement callElement in callsElement.EnumerateArray())
+            {
+                JsonElement functionElement = callElement.GetProperty("function");
+                string name = GetString(functionElement, "name", "");
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    throw new InvalidOperationException(
+                        "API вернул вызов инструмента без имени функции.");
+                }
+
+                toolCalls.Add(new ChatToolCall
+                {
+                    Id = GetString(callElement, "id", Guid.NewGuid().ToString("N")),
+                    Function = new ChatFunctionCall
+                    {
+                        Name = name,
+                        Arguments = GetJsonString(functionElement, "arguments", "{}")
+                    }
+                });
+            }
+        }
+
         JsonElement usage = root.TryGetProperty(
             "usage", out JsonElement usageElement)
                 ? usageElement
@@ -222,6 +256,7 @@ public class OpenAICompatibleProvider : IAIProvider
         return new ChatResult
         {
             Content = GetString(message, "content", ""),
+            ToolCalls = toolCalls,
             FinishReason = GetString(
                 choice, "finish_reason", "unknown"),
             PromptTokens = GetInt(usage, "prompt_tokens"),
@@ -279,6 +314,33 @@ public class OpenAICompatibleProvider : IAIProvider
             : fallback;
     }
 
+    private static string GetJsonString(
+        JsonElement element,
+        string property,
+        string fallback)
+    {
+        if (element.ValueKind != JsonValueKind.Object ||
+            !element.TryGetProperty(property, out JsonElement value))
+        {
+            return fallback;
+        }
+
+        return value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? fallback
+            : value.GetRawText();
+    }
+
+    private static OpenAICompatibleMessage ToOpenAIMessage(ChatMessage message)
+    {
+        return new OpenAICompatibleMessage
+        {
+            Role = message.Role,
+            Content = message.Content,
+            ToolCalls = message.ToolCalls,
+            ToolCallId = message.ToolCallId
+        };
+    }
+
     private static int GetInt(
         JsonElement element,
         string property)
@@ -305,7 +367,13 @@ public class OpenAICompatibleProvider : IAIProvider
         public string Model { get; set; } = "";
 
         [JsonPropertyName("messages")]
-        public List<ChatMessage> Messages { get; set; } = [];
+        public List<OpenAICompatibleMessage> Messages { get; set; } = [];
+
+        [JsonPropertyName("tools")]
+        public List<OpenAICompatibleTool>? Tools { get; set; }
+
+        [JsonPropertyName("tool_choice")]
+        public string? ToolChoice { get; set; }
 
         [JsonPropertyName("max_tokens")]
         public int? MaxTokens { get; set; }
@@ -333,5 +401,29 @@ public class OpenAICompatibleProvider : IAIProvider
 
         [JsonPropertyName("thinking")]
         public object? Thinking { get; set; }
+    }
+
+    private sealed class OpenAICompatibleMessage
+    {
+        [JsonPropertyName("role")]
+        public string Role { get; set; } = "";
+
+        [JsonPropertyName("content")]
+        public string Content { get; set; } = "";
+
+        [JsonPropertyName("tool_calls")]
+        public List<ChatToolCall>? ToolCalls { get; set; }
+
+        [JsonPropertyName("tool_call_id")]
+        public string? ToolCallId { get; set; }
+    }
+
+    private sealed class OpenAICompatibleTool
+    {
+        [JsonPropertyName("type")]
+        public string Type { get; set; } = "function";
+
+        [JsonPropertyName("function")]
+        public ChatFunctionDefinition Function { get; set; } = new();
     }
 }

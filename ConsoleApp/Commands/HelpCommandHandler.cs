@@ -60,6 +60,10 @@ public sealed class HelpCommandHandler : IConsoleCommandHandler
               /help                   Показать эту справку
               /exit                   Завершить работу
 
+            ИНСТРУМЕНТЫ АГЕНТА:
+              Спросить текущее время, попросить вычислить выражение
+              или бросить кубик. Агент сам выберет инструмент.
+
             Примеры:
               /provider ProxyAPI
               /model anthropic/claude-opus-5-5
@@ -69,6 +73,8 @@ public sealed class HelpCommandHandler : IConsoleCommandHandler
               /max_tokens 4096
               /reasoning high
               /open 3
+              Который сейчас час?
+              Сколько минут прошло с полуночи? Узнай время и посчитай.
 
             =================================
             """);

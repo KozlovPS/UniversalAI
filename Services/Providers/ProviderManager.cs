@@ -7,7 +7,7 @@ using UniversalAI.Providers.OpenAICompatible;
 
 namespace UniversalAI.Services.Providers;
 
-public class ProviderManager
+public class ProviderManager : IProviderResolver
 {
     private readonly AppDbContext _db;
     private readonly HttpClient _http;

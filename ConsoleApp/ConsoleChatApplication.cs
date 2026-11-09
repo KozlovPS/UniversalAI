@@ -1,6 +1,7 @@
 using UniversalAI.Data.Entities;
 using UniversalAI.Providers;
 using UniversalAI.Services;
+using UniversalAI.Services.Agents;
 using UniversalAI.Services.Providers;
 
 namespace UniversalAI.ConsoleApp;
@@ -9,18 +10,18 @@ public sealed class ConsoleChatApplication
 {
     private readonly ConversationService _conversations;
     private readonly ProviderManager _providers;
-    private readonly ChatService _chat;
+    private readonly ToolCallingAgent _agent;
     private readonly ConsoleCommandRouter _commands;
 
     public ConsoleChatApplication(
         ConversationService conversations,
         ProviderManager providers,
-        ChatService chat,
+        ToolCallingAgent agent,
         ConsoleCommandRouter commands)
     {
         _conversations = conversations;
         _providers = providers;
-        _chat = chat;
+        _agent = agent;
         _commands = commands;
     }
 
@@ -92,7 +93,7 @@ public sealed class ConsoleChatApplication
     {
         try
         {
-            ChatTurnResult turn = await _chat.SendMessageAsync(
+            AgentTurnResult turn = await _agent.RunAsync(
                 conversationId,
                 input,
                 cancellationToken);
@@ -101,8 +102,9 @@ public sealed class ConsoleChatApplication
             Console.WriteLine(turn.Response.Content);
             Console.WriteLine("\n--- Статистика ---");
             Console.WriteLine($"Провайдер: {turn.ProviderName}");
-            Console.WriteLine($"Модель: {turn.Request.Model}");
+            Console.WriteLine($"Модель: {turn.Model}");
             Console.WriteLine($"Finish reason: {turn.Response.FinishReason}");
+            Console.WriteLine($"Циклы инструментов: {turn.ToolRounds}");
             Console.WriteLine($"Prompt tokens: {turn.Response.PromptTokens}");
             Console.WriteLine($"Completion tokens: {turn.Response.CompletionTokens}");
             Console.WriteLine($"Total tokens: {turn.Response.TotalTokens}");

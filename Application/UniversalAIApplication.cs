@@ -6,6 +6,7 @@ using UniversalAI.Data;
 using UniversalAI.Providers.GigaChat;
 using UniversalAI.Providers.OpenAICompatible;
 using UniversalAI.Services;
+using UniversalAI.Services.Agents;
 using UniversalAI.Services.Providers;
 
 namespace UniversalAI.Application;
@@ -37,7 +38,10 @@ public static class UniversalAIApplication
         ConversationService conversations = new(db);
         ProviderConnectionService providerConnections = new(db);
         ProviderManager providers = new(db, http, gigaOptions);
-        ChatService chat = new(conversations, providers);
+        ToolCallingAgent agent = new(
+            conversations,
+            providers,
+            new AgentToolRegistry());
 
         ConsoleCommandRouter commands = new(
         [
@@ -53,7 +57,7 @@ public static class UniversalAIApplication
             new GenerationSettingsCommandHandler(conversations, providers)
         ]);
 
-        ConsoleChatApplication console = new(conversations, providers, chat, commands);
+        ConsoleChatApplication console = new(conversations, providers, agent, commands);
         await console.RunAsync();
         return 0;
     }

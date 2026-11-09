@@ -11,4 +11,8 @@ public class ChatResult
     public int CompletionTokens { get; set; }
 
     public int TotalTokens { get; set; }
+
+    public List<ChatToolCall> ToolCalls { get; set; } = [];
+
+    public string? FunctionsStateId { get; set; }
 }

@@ -21,4 +21,6 @@ public class ProviderCapabilities
     public bool SupportsJsonSchema { get; set; }
 
     public bool SupportsStreaming { get; set; }
+
+    public bool SupportsFunctionCalling { get; set; }
 }
