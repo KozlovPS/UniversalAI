@@ -31,11 +31,43 @@ public sealed class ConsoleChatApplication
         Console.WriteLine("       UniversalAI");
         Console.WriteLine("================================");
 
-        ConsoleChatSession session = new()
+        List<ConversationEntity> savedConversations =
+            await _conversations.GetConversationsAsync(cancellationToken);
+        ConsoleChatSession session;
+
+        if (savedConversations.Count > 0)
         {
-            ConversationId = await _conversations.CreateConversationAsync(cancellationToken),
-            AgentId = _agents.DefaultAgentId
-        };
+            ConversationEntity latestConversation = savedConversations[0];
+            session = new ConsoleChatSession
+            {
+                ConversationId = latestConversation.Id,
+                AgentId = latestConversation.AgentId
+            };
+
+            List<UniversalAI.Core.ChatMessage> history =
+                await _conversations.GetMessagesAsync(
+                    latestConversation.Id,
+                    cancellationToken);
+            Console.WriteLine(
+                $"Продолжаем диалог ID {latestConversation.Id}: " +
+                $"{latestConversation.Title} ({history.Count} сообщений).");
+            Console.WriteLine("Чтобы начать новый диалог, введите /new.");
+        }
+        else
+        {
+            session = new ConsoleChatSession
+            {
+                ConversationId = await _conversations.CreateConversationAsync(cancellationToken),
+                AgentId = _agents.DefaultAgentId
+            };
+
+            Console.Write("Название нового диалога (Enter — по умолчанию): ");
+            string? title = Console.ReadLine()?.Trim();
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                await _conversations.RenameConversationAsync(session.ConversationId, title);
+            }
+        }
 
         ConversationEntity? conversation =
             await _conversations.GetConversationAsync(session.ConversationId);
@@ -45,13 +77,6 @@ public sealed class ConsoleChatApplication
         Console.WriteLine($"Провайдер: {provider.Name}");
         Console.WriteLine($"Модель: {conversation?.Model}");
         Console.WriteLine($"Агент: {_agents.Get(session.AgentId).DisplayName}");
-        Console.Write("Название нового диалога (Enter — по умолчанию): ");
-
-        string? title = Console.ReadLine()?.Trim();
-        if (!string.IsNullOrWhiteSpace(title))
-        {
-            await _conversations.RenameConversationAsync(session.ConversationId, title);
-        }
 
         Console.WriteLine($"\nID диалога: {session.ConversationId}");
         Console.WriteLine("\nДля просмотра списка команд введите /help.");

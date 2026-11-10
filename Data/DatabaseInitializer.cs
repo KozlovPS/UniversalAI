@@ -12,6 +12,35 @@ public static class DatabaseInitializer
     {
         await db.Database.EnsureCreatedAsync(cancellationToken);
 
+        bool hasPayloadJson = await HasColumnAsync(
+            db,
+            "ChatMessages",
+            "PayloadJson",
+            cancellationToken);
+        bool hasAgentId = await HasColumnAsync(
+            db,
+            "Conversations",
+            "AgentId",
+            cancellationToken);
+
+        if (hasPayloadJson && hasAgentId)
+        {
+            return;
+        }
+
+        Console.WriteLine(
+            "Обнаружена старая схема SQLite. База будет пересоздана без миграции.");
+
+        await db.Database.EnsureDeletedAsync(cancellationToken);
+        await db.Database.EnsureCreatedAsync(cancellationToken);
+    }
+
+    private static async Task<bool> HasColumnAsync(
+        AppDbContext db,
+        string tableName,
+        string columnName,
+        CancellationToken cancellationToken)
+    {
         DbConnection connection = db.Database.GetDbConnection();
         bool closeConnection = connection.State != ConnectionState.Open;
         if (closeConnection)
@@ -21,30 +50,21 @@ public static class DatabaseInitializer
 
         try
         {
-            bool hasAgentId;
-            await using (DbCommand command = connection.CreateCommand())
+            await using DbCommand command = connection.CreateCommand();
+            command.CommandText = $"PRAGMA table_info(\"{tableName}\");";
+            await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
             {
-                command.CommandText = "PRAGMA table_info(\"Conversations\");";
-                await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
-                hasAgentId = false;
-                while (await reader.ReadAsync(cancellationToken))
+                if (string.Equals(
+                    reader.GetString(1),
+                    columnName,
+                    StringComparison.OrdinalIgnoreCase))
                 {
-                    if (string.Equals(reader.GetString(1), "AgentId", StringComparison.OrdinalIgnoreCase))
-                    {
-                        hasAgentId = true;
-                        break;
-                    }
+                    return true;
                 }
             }
 
-            if (!hasAgentId)
-            {
-                await using DbCommand command = connection.CreateCommand();
-                command.CommandText =
-                    "ALTER TABLE \"Conversations\" " +
-                    "ADD COLUMN \"AgentId\" TEXT NOT NULL DEFAULT 'tools';";
-                await command.ExecuteNonQueryAsync(cancellationToken);
-            }
+            return false;
         }
         finally
         {

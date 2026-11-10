@@ -66,18 +66,16 @@ public sealed class ChatService
 
         ChatResult response = await provider.SendMessageAsync(request, cancellationToken);
 
-        await _conversations.SaveMessageAsync(
+        await _conversations.SaveMessagesAsync(
             conversationId,
-            userMessage,
-            cancellationToken);
-
-        await _conversations.SaveMessageAsync(
-            conversationId,
-            new ChatMessage
-            {
-                Role = "assistant",
-                Content = response.Content
-            },
+            [
+                userMessage,
+                new ChatMessage
+                {
+                    Role = "assistant",
+                    Content = response.Content
+                }
+            ],
             cancellationToken);
 
         return new ChatTurnResult(provider.Name, request, response);

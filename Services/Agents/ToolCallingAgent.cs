@@ -50,6 +50,7 @@ public sealed class ToolCallingAgent : IAgent
             Role = "user",
             Content = content
         };
+        List<ChatMessage> turnMessages = [userMessage];
 
         List<ChatMessage> messages =
         [
@@ -130,17 +131,14 @@ public sealed class ToolCallingAgent : IAgent
                     response.TotalTokens,
                     []));
 
-                await _conversations.SaveMessageAsync(
+                turnMessages.Add(new ChatMessage
+                {
+                    Role = "assistant",
+                    Content = finalResponse.Content
+                });
+                await _conversations.SaveMessagesAsync(
                     conversationId,
-                    userMessage,
-                    cancellationToken);
-                await _conversations.SaveMessageAsync(
-                    conversationId,
-                    new ChatMessage
-                    {
-                        Role = "assistant",
-                        Content = finalResponse.Content
-                    },
+                    turnMessages,
                     cancellationToken);
 
                 return new AgentTurnResult(
@@ -158,13 +156,15 @@ public sealed class ToolCallingAgent : IAgent
             }
 
             toolRounds++;
-            messages.Add(new ChatMessage
+            ChatMessage assistantToolCallMessage = new()
             {
                 Role = "assistant",
                 Content = response.Content,
                 ToolCalls = response.ToolCalls,
                 FunctionsStateId = response.FunctionsStateId
-            });
+            };
+            messages.Add(assistantToolCallMessage);
+            turnMessages.Add(assistantToolCallMessage);
 
             List<AgentToolCallTrace> toolCallTraces = [];
             foreach (ChatToolCall toolCall in response.ToolCalls)
@@ -178,13 +178,15 @@ public sealed class ToolCallingAgent : IAgent
                     toolCall.Function.Arguments,
                     toolOutput));
 
-                messages.Add(new ChatMessage
+                ChatMessage toolResultMessage = new()
                 {
                     Role = "tool",
                     ToolCallId = toolCall.Id,
                     FunctionName = toolCall.Function.Name,
                     Content = toolOutput
-                });
+                };
+                messages.Add(toolResultMessage);
+                turnMessages.Add(toolResultMessage);
             }
 
             modelCalls.Add(new AgentModelCallTrace(

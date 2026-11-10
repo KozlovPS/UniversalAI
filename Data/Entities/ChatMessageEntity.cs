@@ -10,6 +10,8 @@ public class ChatMessageEntity
 
     public string Content { get; set; } = "";
 
+    public string PayloadJson { get; set; } = "";
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ConversationEntity? Conversation { get; set; }

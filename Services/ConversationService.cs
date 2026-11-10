@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using UniversalAI.Core;
 using UniversalAI.Data;
 using UniversalAI.Data.Entities;
@@ -38,6 +39,22 @@ public class ConversationService
         ChatMessage message,
         CancellationToken cancellationToken = default)
     {
+        await SaveMessagesAsync(conversationId, [message], cancellationToken);
+    }
+
+    public async Task SaveMessagesAsync(
+        int conversationId,
+        IReadOnlyCollection<ChatMessage> messages,
+        CancellationToken cancellationToken = default)
+    {
+        if (messages.Count == 0)
+        {
+            return;
+        }
+
+        await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction =
+            await _db.Database.BeginTransactionAsync(cancellationToken);
+
         ConversationEntity? conversation = await _db.Conversations
             .FirstOrDefaultAsync(
                 c => c.Id == conversationId,
@@ -49,28 +66,31 @@ public class ConversationService
                 $"Диалог с ID {conversationId} не найден.");
         }
 
-        ChatMessageEntity entity = new()
+        List<ChatMessageEntity> entities = messages.Select(message => new ChatMessageEntity
         {
             ConversationId = conversationId,
             Role = message.Role,
             Content = message.Content,
+            PayloadJson = JsonSerializer.Serialize(message),
             CreatedAt = DateTime.UtcNow
-        };
+        }).ToList();
 
-        _db.ChatMessages.Add(entity);
+        _db.ChatMessages.AddRange(entities);
 
         // Заголовок формируем из первого сообщения пользователя
-        if (message.Role == "user" &&
-            conversation.Title == "Новый диалог")
+        ChatMessage? firstUserMessage = messages.FirstOrDefault(
+            message => message.Role == "user");
+        if (firstUserMessage != null && conversation.Title == "Новый диалог")
         {
-            conversation.Title = message.Content.Length > 50
-                ? message.Content[..50] + "..."
-                : message.Content;
+            conversation.Title = firstUserMessage.Content.Length > 50
+                ? firstUserMessage.Content[..50] + "..."
+                : firstUserMessage.Content;
         }
 
         conversation.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     // Загрузка истории диалога
@@ -78,16 +98,26 @@ public class ConversationService
         int conversationId,
         CancellationToken cancellationToken = default)
     {
-        return await _db.ChatMessages
+        List<ChatMessageEntity> entities = await _db.ChatMessages
             .Where(m => m.ConversationId == conversationId)
             .OrderBy(m => m.CreatedAt)
             .ThenBy(m => m.Id)
-            .Select(m => new ChatMessage
-            {
-                Role = m.Role,
-                Content = m.Content
-            })
             .ToListAsync(cancellationToken);
+
+        return entities.Select(entity =>
+            string.IsNullOrWhiteSpace(entity.PayloadJson)
+                ? new ChatMessage
+                {
+                    Role = entity.Role,
+                    Content = entity.Content
+                }
+                : JsonSerializer.Deserialize<ChatMessage>(entity.PayloadJson)
+                  ?? new ChatMessage
+                  {
+                      Role = entity.Role,
+                      Content = entity.Content
+                  })
+            .ToList();
     }
 
     // Очистка истории диалога
