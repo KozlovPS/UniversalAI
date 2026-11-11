@@ -3,6 +3,8 @@ using UniversalAI.Providers;
 using UniversalAI.Services;
 using UniversalAI.Services.Agents;
 using UniversalAI.Services.Providers;
+using System.Globalization;
+using System.Text;
 
 namespace UniversalAI.ConsoleApp;
 
@@ -107,6 +109,23 @@ public sealed class ConsoleChatApplication
                 continue;
             }
 
+            if (input.Equals("/paste", StringComparison.OrdinalIgnoreCase))
+            {
+                string? pastedText = ReadMultilineInput(session);
+                if (pastedText == null)
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(pastedText))
+                {
+                    Console.WriteLine("Вставка пустая, запрос не отправлен.");
+                    continue;
+                }
+
+                input = pastedText;
+            }
+
             await SendChatMessageAsync(
                 input,
                 session.ConversationId,
@@ -115,6 +134,42 @@ public sealed class ConsoleChatApplication
         }
 
         Console.WriteLine("\nРабота завершена.");
+    }
+
+    private static string? ReadMultilineInput(ConsoleChatSession session)
+    {
+        Console.WriteLine(
+            "Вставьте текст. Завершите ввод отдельной строкой /send; " +
+            "для отмены введите /cancel.");
+
+        StringBuilder content = new();
+        while (true)
+        {
+            string? line = Console.ReadLine();
+            if (line == null)
+            {
+                session.ShouldExit = true;
+                return null;
+            }
+
+            if (line.Equals("/send", StringComparison.OrdinalIgnoreCase))
+            {
+                string pastedText = content.ToString().TrimEnd('\r', '\n');
+                int estimatedTokens = TokenUsageCalculator.EstimateText(pastedText);
+                Console.WriteLine(
+                    $"Собрано {pastedText.Length:N0} символов; " +
+                    $"оценка текста — около {estimatedTokens:N0} токенов.");
+                return pastedText;
+            }
+
+            if (line.Equals("/cancel", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Вставка отменена.");
+                return null;
+            }
+
+            content.AppendLine(line);
+        }
     }
 
     private async Task SendChatMessageAsync(
@@ -139,9 +194,20 @@ public sealed class ConsoleChatApplication
             Console.WriteLine($"Модель: {turn.Model}");
             Console.WriteLine($"Finish reason: {turn.Response.FinishReason}");
             Console.WriteLine($"Циклы инструментов: {turn.ToolRounds}");
-            Console.WriteLine($"Prompt tokens: {turn.Response.PromptTokens}");
-            Console.WriteLine($"Completion tokens: {turn.Response.CompletionTokens}");
-            Console.WriteLine($"Total tokens: {turn.Response.TotalTokens}");
+            WriteTokenUsage(turn.TokenUsage);
+        }
+        catch (ModelContextLimitException ex)
+        {
+            Console.WriteLine("\nМодель отклонила запрос: превышен лимит контекста.");
+            Console.WriteLine(ex.Message);
+            if (!string.IsNullOrWhiteSpace(ex.InnerException?.Message))
+            {
+                Console.WriteLine($"Ответ API: {FormatTraceValue(ex.InnerException.Message)}");
+            }
+
+            Console.WriteLine(
+                "Ответ не получен, ход диалога не сохранён. " +
+                "Можно очистить историю командой /reset или сократить запрос.");
         }
         catch (NotSupportedException ex)
         {
@@ -156,6 +222,34 @@ public sealed class ConsoleChatApplication
         }
     }
 
+    private static void WriteTokenUsage(AgentTokenUsage usage)
+    {
+        Console.WriteLine("\n--- Токены и стоимость ---");
+        Console.WriteLine($"Текущий запрос (оценка): {usage.CurrentRequestEstimate}");
+        Console.WriteLine($"История до запроса (оценка): {usage.HistoryEstimateBefore}");
+        Console.WriteLine($"Полный первый контекст (оценка): {usage.EstimatedPrompt}");
+        Console.WriteLine($"История после ответа (оценка): {usage.HistoryEstimateAfter}");
+        Console.WriteLine(
+            $"Usage API за ход: prompt {FormatCount(usage.PromptTokens)}, " +
+            $"completion {FormatCount(usage.CompletionTokens)}, " +
+            $"total {FormatCount(usage.TotalTokens)}");
+        Console.WriteLine(
+            $"Накопительно по сохранённым usage ({usage.MeasuredHistoryTurns} прошлых ходов): " +
+            $"prompt {FormatCount(usage.CumulativePromptTokens)}, " +
+            $"completion {FormatCount(usage.CumulativeCompletionTokens)}");
+        Console.WriteLine($"Стоимость за ход: {FormatCost(usage.CostRubles)}");
+        Console.WriteLine($"Стоимость накопительно: {FormatCost(usage.CumulativeCostRubles)}");
+        Console.WriteLine(
+            "Оценка контекста приблизительная; usage API — фактические токены, " +
+            "сообщённые провайдером.");
+    }
+
+    private static string FormatCount(int? value) => value?.ToString() ?? "н/д";
+
+    private static string FormatCost(decimal? value) => value.HasValue
+        ? value.Value.ToString("0.00000000", CultureInfo.InvariantCulture) + " ₽"
+        : "н/д (тариф не задан или API не вернул usage)";
+
     private static void WriteAgentTrace(
         IReadOnlyList<AgentModelCallTrace> modelCalls)
     {
@@ -166,7 +260,8 @@ public sealed class ConsoleChatApplication
                 $"Запрос к модели #{modelCall.Number}: " +
                 $"finish={modelCall.FinishReason}, " +
                 $"токены={modelCall.TotalTokens} " +
-                $"(вход {modelCall.PromptTokens}, выход {modelCall.CompletionTokens})");
+                $"(вход {modelCall.PromptTokens}, выход {modelCall.CompletionTokens}), " +
+                $"оценка контекста={modelCall.EstimatedPromptTokens}");
 
             if (modelCall.ToolCalls.Count == 0)
             {

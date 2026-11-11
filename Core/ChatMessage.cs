@@ -25,4 +25,19 @@ public class ChatMessage
     [JsonPropertyName("functions_state_id")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? FunctionsStateId { get; set; }
+
+    // Usage for the completed assistant turn. Stored in PayloadJson so the
+    // console can show conversation-wide totals after the app is restarted.
+    // Providers intentionally do not map these fields into API messages.
+    [JsonPropertyName("usage_model")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? UsageModel { get; set; }
+
+    [JsonPropertyName("usage_prompt_tokens")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? UsagePromptTokens { get; set; }
+
+    [JsonPropertyName("usage_completion_tokens")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? UsageCompletionTokens { get; set; }
 }

@@ -6,7 +6,10 @@ public sealed record AgentModelCallTrace(
     int PromptTokens,
     int CompletionTokens,
     int TotalTokens,
-    IReadOnlyList<AgentToolCallTrace> ToolCalls);
+    IReadOnlyList<AgentToolCallTrace> ToolCalls)
+{
+    public int EstimatedPromptTokens { get; init; }
+}
 
 public sealed record AgentToolCallTrace(
     string Name,

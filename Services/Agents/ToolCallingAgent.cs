@@ -2,6 +2,7 @@ using UniversalAI.Core;
 using UniversalAI.Data.Entities;
 using UniversalAI.Providers;
 using UniversalAI.Services.Providers;
+using System.Net;
 
 namespace UniversalAI.Services.Agents;
 
@@ -77,6 +78,7 @@ public sealed class ToolCallingAgent : IAgent
         int promptTokens = 0;
         int completionTokens = 0;
         int totalTokens = 0;
+        int estimatedPromptTokens = 0;
         List<AgentModelCallTrace> modelCalls = [];
 
         while (true)
@@ -98,9 +100,27 @@ public sealed class ToolCallingAgent : IAgent
                 ReasoningBudgetTokens = conversation.ReasoningBudgetTokens
             };
 
-            ChatResult response = await provider.SendMessageAsync(
-                request,
-                cancellationToken);
+            int currentEstimatedPrompt = TokenUsageCalculator.EstimateRequest(request);
+            if (modelCalls.Count == 0)
+            {
+                estimatedPromptTokens = currentEstimatedPrompt;
+            }
+
+            ChatResult response;
+            try
+            {
+                response = await provider.SendMessageAsync(
+                    request,
+                    cancellationToken);
+            }
+            catch (HttpRequestException exception) when (
+                TokenUsageCalculator.IsContextLimitError(exception.Message))
+            {
+                throw new ModelContextLimitException(
+                    request.Model,
+                    currentEstimatedPrompt,
+                    exception);
+            }
 
             promptTokens += response.PromptTokens;
             completionTokens += response.CompletionTokens;
@@ -129,24 +149,49 @@ public sealed class ToolCallingAgent : IAgent
                     response.PromptTokens,
                     response.CompletionTokens,
                     response.TotalTokens,
-                    []));
+                    [])
+                {
+                    EstimatedPromptTokens = currentEstimatedPrompt
+                });
 
                 turnMessages.Add(new ChatMessage
                 {
                     Role = "assistant",
-                    Content = finalResponse.Content
+                    Content = finalResponse.Content,
+                    UsageModel = promptTokens > 0 || completionTokens > 0
+                        ? conversation.Model
+                        : null,
+                    UsagePromptTokens = promptTokens > 0 || completionTokens > 0
+                        ? promptTokens
+                        : null,
+                    UsageCompletionTokens = promptTokens > 0 || completionTokens > 0
+                        ? completionTokens
+                        : null
                 });
                 await _conversations.SaveMessagesAsync(
                     conversationId,
                     turnMessages,
                     cancellationToken);
 
+                AgentTokenUsage tokenUsage = TokenUsageCalculator.CreateTurnUsage(
+                    conversation.Model,
+                    content,
+                    history,
+                    [.. history, .. turnMessages],
+                    estimatedPromptTokens,
+                    promptTokens,
+                    completionTokens,
+                    totalTokens);
+
                 return new AgentTurnResult(
                     provider.Name,
                     conversation.Model,
                     finalResponse,
                     toolRounds,
-                    modelCalls);
+                    modelCalls)
+                {
+                    TokenUsage = tokenUsage
+                };
             }
 
             if (toolRounds >= MaxToolRounds)
@@ -195,7 +240,10 @@ public sealed class ToolCallingAgent : IAgent
                 response.PromptTokens,
                 response.CompletionTokens,
                 response.TotalTokens,
-                toolCallTraces));
+                toolCallTraces)
+            {
+                EstimatedPromptTokens = currentEstimatedPrompt
+            });
         }
     }
 }

@@ -60,6 +60,8 @@ public sealed class HelpCommandHandler : IConsoleCommandHandler
               /reasoning_budget 4096  Установить бюджет reasoning-токенов
 
             ДОПОЛНИТЕЛЬНО:
+              /paste                  Вставить многострочный текст; завершить строкой /send
+              /tokens                 Статистика токенов и стоимости истории
               /settings               Показать настройки диалога
               /defaults               Сбросить настройки генерации
               /help                   Показать эту справку

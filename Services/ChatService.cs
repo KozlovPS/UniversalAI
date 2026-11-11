@@ -64,7 +64,19 @@ public sealed class ChatService
             conversationId,
             cancellationToken);
 
-        ChatResult response = await provider.SendMessageAsync(request, cancellationToken);
+        ChatResult response;
+        try
+        {
+            response = await provider.SendMessageAsync(request, cancellationToken);
+        }
+        catch (HttpRequestException exception) when (
+            Agents.TokenUsageCalculator.IsContextLimitError(exception.Message))
+        {
+            throw new Agents.ModelContextLimitException(
+                request.Model,
+                Agents.TokenUsageCalculator.EstimateRequest(request),
+                exception);
+        }
 
         await _conversations.SaveMessagesAsync(
             conversationId,
@@ -73,7 +85,16 @@ public sealed class ChatService
                 new ChatMessage
                 {
                     Role = "assistant",
-                    Content = response.Content
+                    Content = response.Content,
+                    UsageModel = response.PromptTokens > 0 || response.CompletionTokens > 0
+                        ? request.Model
+                        : null,
+                    UsagePromptTokens = response.PromptTokens > 0 || response.CompletionTokens > 0
+                        ? response.PromptTokens
+                        : null,
+                    UsageCompletionTokens = response.PromptTokens > 0 || response.CompletionTokens > 0
+                        ? response.CompletionTokens
+                        : null
                 }
             ],
             cancellationToken);

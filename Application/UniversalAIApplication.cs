@@ -59,6 +59,7 @@ public static class UniversalAIApplication
                 gigaOptions,
                 proxyOptions),
             new HelpCommandHandler(),
+            new TokenStatisticsCommandHandler(conversations),
             new AgentCommandHandler(agents, conversations),
             new ConversationCommandHandler(conversations),
             new GenerationSettingsCommandHandler(conversations, providers)
