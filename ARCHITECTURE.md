@@ -12,7 +12,7 @@ Program.cs
        ├─ Providers/                          — протоколы GigaChat и OpenAI-compatible
        ├─ Core/                               — модели запросов и проверка возможностей
        ├─ Data/                               — EF Core контекст и сущности SQLite
-       └─ Benchmarks/                         — независимые эксперименты Day-3/4/5/9
+       └─ Benchmarks/                         — независимые эксперименты Day-3/4/5/9/10
 ```
 
 ## Границы ответственности
@@ -31,3 +31,5 @@ Program.cs
 Новая консольная команда добавляется отдельным `IConsoleCommandHandler` и регистрируется в `UniversalAIApplication`. Новый benchmark получает собственный класс с `RunAsync` и одну запись в `BenchmarkCommand`.
 
 Day-9 добавляет воспроизводимый эксперимент на 30 сообщениях и 13 заранее заданных деталях. Подробности запуска и методики: `BENCHMARK-DAY-9.md`. Офлайн-проверки: `dotnet run -- --benchmark day9 --self-test`.
+
+Day-10 сравнивает Sliding Window, Sticky Facts и исходное summary Дня 9 на одном сохранённом диалоге. `Day10ContextSession` — отдельный агент эксперимента с сериализуемым состоянием и независимыми ветками; `Services/Context` содержит окно и обновление facts. Все запросы и usage сохраняются, стоимость веток учитывается отдельно. Это не меняет стратегии обычного консольного чата. Запуск и методика: `BENCHMARK-DAY-10.md`; офлайн-проверки: `dotnet run -- --benchmark day10 --self-test`.
