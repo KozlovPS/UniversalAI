@@ -23,7 +23,10 @@ public static class DatabaseInitializer
             "AgentId",
             cancellationToken);
 
-        if (hasPayloadJson && hasAgentId)
+        bool hasCompression = await HasColumnAsync(
+            db, "Conversations", "CompressionEnabled", cancellationToken);
+
+        if (hasPayloadJson && hasAgentId && hasCompression)
         {
             return;
         }

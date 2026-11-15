@@ -60,6 +60,12 @@ public sealed class HelpCommandHandler : IConsoleCommandHandler
               /reasoning_budget 4096  Установить бюджет reasoning-токенов
 
             ДОПОЛНИТЕЛЬНО:
+              /compression            Показать настройки сжатия истории
+              /compression on|off     Включить сжатие / отправлять полную историю
+              /compression keep 6     Минимум последних исходных сообщений
+              /compression batch 10   Сколько старых сообщений накопить до сжатия
+              /compression now        Сжать сейчас, не дожидаясь batch
+              /summary                Показать сохранённую память
               /paste                  Вставить многострочный текст; завершить строкой /send
               /tokens                 Статистика токенов и стоимости истории
               /settings               Показать настройки диалога

@@ -195,6 +195,20 @@ public sealed class ConsoleChatApplication
             Console.WriteLine($"Finish reason: {turn.Response.FinishReason}");
             Console.WriteLine($"Циклы инструментов: {turn.ToolRounds}");
             WriteTokenUsage(turn.TokenUsage);
+            if (turn.Context is { } context)
+            {
+                Console.WriteLine("\n--- Контекст истории ---");
+                Console.WriteLine(
+                    $"До сжатия: ~{context.RawHistoryTokens}; отправлено: ~{context.EffectiveHistoryTokens} токенов.");
+                Console.WriteLine(context.UsesSummary
+                    ? $"Summary заменяет {context.CoveredMessages} сообщений; исходных в контексте: {context.RecentMessages}."
+                    : "В запрос передана исходная история.");
+                if (context.SummaryCall is { } summary)
+                {
+                    Console.WriteLine(
+                        $"Дополнительно на обновление summary (usage API): вход {summary.PromptTokens}, выход {summary.CompletionTokens}.");
+                }
+            }
         }
         catch (ModelContextLimitException ex)
         {
@@ -237,8 +251,8 @@ public sealed class ConsoleChatApplication
             $"Накопительно по сохранённым usage ({usage.MeasuredHistoryTurns} прошлых ходов): " +
             $"prompt {FormatCount(usage.CumulativePromptTokens)}, " +
             $"completion {FormatCount(usage.CumulativeCompletionTokens)}");
-        Console.WriteLine($"Стоимость за ход: {FormatCost(usage.CostRubles)}");
-        Console.WriteLine($"Стоимость накопительно: {FormatCost(usage.CumulativeCostRubles)}");
+        Console.WriteLine($"Стоимость ответов за ход (без summary): {FormatCost(usage.CostRubles)}");
+        Console.WriteLine($"Стоимость ответов накопительно (без summary): {FormatCost(usage.CumulativeCostRubles)}");
         Console.WriteLine(
             "Оценка контекста приблизительная; usage API — фактические токены, " +
             "сообщённые провайдером.");

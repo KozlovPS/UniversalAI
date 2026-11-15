@@ -16,15 +16,18 @@ public sealed class ToolCallingAgent : IAgent
     private readonly ConversationService _conversations;
     private readonly IProviderResolver _providers;
     private readonly AgentToolRegistry _tools;
+    private readonly ContextCompressionService _context;
 
     public ToolCallingAgent(
         ConversationService conversations,
         IProviderResolver providers,
-        AgentToolRegistry tools)
+        AgentToolRegistry tools,
+        ContextCompressionService context)
     {
         _conversations = conversations;
         _providers = providers;
         _tools = tools;
+        _context = context;
     }
 
     public string Id => AgentId;
@@ -53,6 +56,18 @@ public sealed class ToolCallingAgent : IAgent
         };
         List<ChatMessage> turnMessages = [userMessage];
 
+        IAIProvider provider = await _providers.GetProviderForConversationAsync(
+            conversationId, cancellationToken);
+
+        if (!provider.Capabilities.SupportsFunctionCalling)
+        {
+            throw new NotSupportedException(
+                $"Провайдер {provider.Name} не поддерживает вызов функций.");
+        }
+
+        PreparedContext context = await _context.PrepareAsync(
+            conversation, history, provider, cancellationToken);
+
         List<ChatMessage> messages =
         [
             new ChatMessage
@@ -60,19 +75,9 @@ public sealed class ToolCallingAgent : IAgent
                 Role = "system",
                 Content = conversation.SystemPrompt
             },
-            .. history,
+            .. context.Messages,
             userMessage
         ];
-
-        IAIProvider provider = await _providers.GetProviderForConversationAsync(
-            conversationId,
-            cancellationToken);
-
-        if (!provider.Capabilities.SupportsFunctionCalling)
-        {
-            throw new NotSupportedException(
-                $"Провайдер {provider.Name} не поддерживает вызов функций.");
-        }
 
         int toolRounds = 0;
         int promptTokens = 0;
@@ -190,7 +195,8 @@ public sealed class ToolCallingAgent : IAgent
                     toolRounds,
                     modelCalls)
                 {
-                    TokenUsage = tokenUsage
+                    TokenUsage = tokenUsage,
+                    Context = context
                 };
             }
 

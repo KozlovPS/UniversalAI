@@ -5,4 +5,6 @@ namespace UniversalAI.Services;
 public sealed record ChatTurnResult(
     string ProviderName,
     ChatRequest Request,
-    ChatResult Response);
+    ChatResult Response,
+    IReadOnlyList<ChatMessage> RawHistory,
+    PreparedContext Context);

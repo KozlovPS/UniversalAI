@@ -141,6 +141,11 @@ public class ConversationService
             .ToListAsync(cancellationToken);
 
         _db.ChatMessages.RemoveRange(messages);
+        ContextSummaryEntity? summary = await GetSummaryAsync(conversationId, cancellationToken);
+        if (summary != null)
+        {
+            _db.ContextSummaries.Remove(summary);
+        }
 
         conversation.Title = "Новый диалог";
         conversation.UpdatedAt = DateTime.UtcNow;
@@ -173,6 +178,58 @@ public class ConversationService
     {
         return await _db.Conversations
             .FirstOrDefaultAsync(c => c.Id == id);
+    }
+
+    public Task<ContextSummaryEntity?> GetSummaryAsync(
+        int conversationId, CancellationToken cancellationToken = default) =>
+        _db.ContextSummaries.FirstOrDefaultAsync(s => s.ConversationId == conversationId, cancellationToken);
+
+    public async Task SaveSummaryAsync(
+        int conversationId, string content, int coveredMessageCount,
+        ChatResult usage, CancellationToken cancellationToken = default)
+    {
+        ContextSummaryEntity? summary = await GetSummaryAsync(conversationId, cancellationToken);
+        if (summary == null)
+        {
+            summary = new ContextSummaryEntity { ConversationId = conversationId };
+            _db.ContextSummaries.Add(summary);
+        }
+
+        summary.Content = content;
+        summary.CoveredMessageCount = coveredMessageCount;
+        summary.Revision++;
+        summary.PromptTokens += usage.PromptTokens;
+        summary.CompletionTokens += usage.CompletionTokens;
+        summary.UsageComplete &= usage.PromptTokens > 0 || usage.CompletionTokens > 0;
+        await _db.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task SetCompressionAsync(
+        int conversationId, bool? enabled = null, int? keep = null, int? batch = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (keep is < 2 || batch is < 1)
+        {
+            throw new ArgumentException("Нужно keep >= 2 и batch >= 1.");
+        }
+
+        ConversationEntity conversation = await GetConversationAsync(conversationId)
+            ?? throw new InvalidOperationException("Диалог не найден.");
+        if (enabled.HasValue) conversation.CompressionEnabled = enabled.Value;
+        if (batch.HasValue) conversation.ContextCompressionBatchSize = batch.Value;
+        if (keep.HasValue && keep != conversation.ContextKeepLastMessages)
+        {
+            conversation.ContextKeepLastMessages = keep.Value;
+            ContextSummaryEntity? summary = await GetSummaryAsync(conversationId, cancellationToken);
+            if (summary != null)
+            {
+                // Rebuild with the new boundary, keeping the accumulated overhead.
+                summary.Content = "";
+                summary.CoveredMessageCount = 0;
+            }
+        }
+
+        await _db.SaveChangesAsync(cancellationToken);
     }
 
     public async Task UpdateSettingsAsync(

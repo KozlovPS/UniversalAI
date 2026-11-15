@@ -36,7 +36,16 @@ public sealed class TokenStatisticsCommandHandler : IConsoleCommandHandler
         Console.WriteLine(
             $"Записанные токены API: prompt {FormatCount(usage.PromptTokens)}, " +
             $"completion {FormatCount(usage.CompletionTokens)}");
-        Console.WriteLine($"Расчётная стоимость: {FormatCost(usage.CostRubles)}");
+        Console.WriteLine($"Расчётная стоимость ответов (без summary): {FormatCost(usage.CostRubles)}");
+        Data.Entities.ContextSummaryEntity? summary = await _conversations.GetSummaryAsync(
+            session.ConversationId, cancellationToken);
+        if (summary != null)
+        {
+            Console.WriteLine($"Summary: обновлений {summary.Revision}, покрыто сообщений {summary.CoveredMessageCount}");
+            Console.WriteLine($"Дополнительный usage API сжатия: prompt {summary.PromptTokens}, completion {summary.CompletionTokens}" +
+                              (summary.UsageComplete ? "" : " (не все вызовы вернули usage)"));
+            Console.WriteLine("Токены сжатия указаны отдельно от usage ответов выше.");
+        }
         Console.WriteLine("Счётчик оценивает текст истории; стоимость учитывает только сохранённые usage и известные тарифы.");
         return true;
     }

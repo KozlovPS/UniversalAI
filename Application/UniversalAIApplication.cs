@@ -38,11 +38,13 @@ public static class UniversalAIApplication
         ConversationService conversations = new(db);
         ProviderConnectionService providerConnections = new(db);
         ProviderManager providers = new(db, http, gigaOptions);
+        ContextCompressionService context = new(conversations);
         ToolCallingAgent toolCallingAgent = new(
             conversations,
             providers,
-            new AgentToolRegistry());
-        ChatService chat = new(conversations, providers);
+            new AgentToolRegistry(),
+            context);
+        ChatService chat = new(conversations, providers, context);
         AgentRegistry agents = new(
         [
             toolCallingAgent,
@@ -60,6 +62,7 @@ public static class UniversalAIApplication
                 proxyOptions),
             new HelpCommandHandler(),
             new TokenStatisticsCommandHandler(conversations),
+            new ContextCommandHandler(conversations, providers, context),
             new AgentCommandHandler(agents, conversations),
             new ConversationCommandHandler(conversations),
             new GenerationSettingsCommandHandler(conversations, providers)

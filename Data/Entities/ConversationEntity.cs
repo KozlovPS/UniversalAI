@@ -30,6 +30,12 @@ public class ConversationEntity
 
     public string AgentId { get; set; } = "tools";
 
+    public bool CompressionEnabled { get; set; } = true;
+
+    public int ContextKeepLastMessages { get; set; } = 6;
+
+    public int ContextCompressionBatchSize { get; set; } = 10;
+
     public double Temperature { get; set; } = 0.7;
 
     public int Id { get; set; }

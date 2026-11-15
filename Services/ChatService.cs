@@ -9,14 +9,17 @@ namespace UniversalAI.Services;
 public sealed class ChatService
 {
     private readonly ConversationService _conversations;
-    private readonly ProviderManager _providers;
+    private readonly IProviderResolver _providers;
+    private readonly ContextCompressionService _context;
 
     public ChatService(
         ConversationService conversations,
-        ProviderManager providers)
+        IProviderResolver providers,
+        ContextCompressionService context)
     {
         _conversations = conversations;
         _providers = providers;
+        _context = context;
     }
 
     public async Task<ChatTurnResult> SendMessageAsync(
@@ -30,6 +33,11 @@ public sealed class ChatService
 
         List<ChatMessage> history =
             await _conversations.GetMessagesAsync(conversationId, cancellationToken);
+
+        IAIProvider provider = await _providers.GetProviderForConversationAsync(
+            conversationId, cancellationToken);
+        PreparedContext context = await _context.PrepareAsync(
+            conversation, history, provider, cancellationToken);
 
         ChatMessage userMessage = new()
         {
@@ -47,7 +55,7 @@ public sealed class ChatService
                     Role = "system",
                     Content = conversation.SystemPrompt
                 },
-                .. history,
+                .. context.Messages,
                 userMessage
             ],
             Temperature = conversation.Temperature,
@@ -59,10 +67,6 @@ public sealed class ChatService
             ReasoningEffort = conversation.ReasoningEffort,
             ReasoningBudgetTokens = conversation.ReasoningBudgetTokens
         };
-
-        IAIProvider provider = await _providers.GetProviderForConversationAsync(
-            conversationId,
-            cancellationToken);
 
         ChatResult response;
         try
@@ -99,6 +103,6 @@ public sealed class ChatService
             ],
             cancellationToken);
 
-        return new ChatTurnResult(provider.Name, request, response);
+        return new ChatTurnResult(provider.Name, request, response, history, context);
     }
 }

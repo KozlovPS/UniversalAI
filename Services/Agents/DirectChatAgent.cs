@@ -39,10 +39,7 @@ public sealed class DirectChatAgent : IAgent
             EstimatedPromptTokens = TokenUsageCalculator.EstimateRequest(turn.Request)
         };
 
-        List<UniversalAI.Core.ChatMessage> historyBefore = turn.Request.Messages
-            .Skip(1)
-            .Take(Math.Max(0, turn.Request.Messages.Count - 2))
-            .ToList();
+        List<UniversalAI.Core.ChatMessage> historyBefore = turn.RawHistory.ToList();
         UniversalAI.Core.ChatMessage savedUser = new()
         {
             Role = "user",
@@ -79,7 +76,8 @@ public sealed class DirectChatAgent : IAgent
             ToolRounds: 0,
             ModelCalls: [trace])
         {
-            TokenUsage = tokenUsage
+            TokenUsage = tokenUsage,
+            Context = turn.Context
         };
     }
 }

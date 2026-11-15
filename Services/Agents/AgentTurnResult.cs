@@ -9,6 +9,8 @@ public sealed record AgentTurnResult(
     int ToolRounds,
     IReadOnlyList<AgentModelCallTrace> ModelCalls)
 {
+    public PreparedContext? Context { get; init; }
+
     public AgentTokenUsage TokenUsage { get; init; } = new(
         0, 0, 0, 0, null, null, null, 0, null, null, null, null);
 }
