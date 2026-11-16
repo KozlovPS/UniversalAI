@@ -66,6 +66,8 @@ public sealed class HelpCommandHandler : IConsoleCommandHandler
               /compression batch 10   Сколько старых сообщений накопить до сжатия
               /compression now        Сжать сейчас, не дожидаясь batch
               /summary                Показать сохранённую память
+              /memory Summary         Выбрать Summary, SlidingWindow или StickyFacts
+              /branch НАЗВАНИЕ        Создать и открыть независимую ветку диалога
               /paste                  Вставить многострочный текст; завершить строкой /send
               /tokens                 Статистика токенов и стоимости истории
               /settings               Показать настройки диалога

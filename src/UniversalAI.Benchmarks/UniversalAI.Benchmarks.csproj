@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\UniversalAI.Engine\UniversalAI.Engine.csproj" />
+    <Content Include="Scenarios\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

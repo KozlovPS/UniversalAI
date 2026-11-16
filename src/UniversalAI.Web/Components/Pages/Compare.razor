@@ -1,0 +1,46 @@
+@page "/compare/{LeftId}/{RightId}"
+@rendermode InteractiveServer
+@inject FileRunStore Store
+@inject RunMetricsReader Metrics
+
+<PageTitle>Сравнение — UniversalAI</PageTitle>
+<a class="back-link" href="/experiments">← Эксперименты</a><div class="eyebrow">ДВА ПРОГОНА</div><h1>Сравнение результатов</h1>
+@if (_error != null) { <p class="alert" role="alert">@_error</p> }
+@if (_left != null && _right != null && _lm != null && _rm != null)
+{
+    <p class="muted">Здесь учтены все записанные вызовы прогона, включая подготовку, память и ветки. В отчётах отдельных экспериментов эти расходы разделены по методике.</p>
+    <section class="panel table-scroll"><table><thead><tr><th>Параметр</th><th><a href="@($"/runs/{LeftId}")">@_left.BenchmarkId · @_left.Model</a></th><th><a href="@($"/runs/{RightId}")">@_right.BenchmarkId · @_right.Model</a></th></tr></thead>
+    <tbody>
+        <tr><td>Состояние</td><td>@RunLabels.Status(_left.Status)</td><td>@RunLabels.Status(_right.Status)</td></tr>
+        <tr><td>Провайдер</td><td>@_left.Provider.Name</td><td>@_right.Provider.Name</td></tr>
+        <tr><td>Версия сценария / оценивания</td><td>@_left.ScenarioVersion / @_left.ScorerVersion</td><td>@_right.ScenarioVersion / @_right.ScorerVersion</td></tr>
+        <tr><td>Вызовы API</td><td>@_lm.Calls</td><td>@_rm.Calls</td></tr>
+        <tr><td>Из них: ответы / память</td><td>@_lm.AnswerCalls / @_lm.MemoryCalls</td><td>@_rm.AnswerCalls / @_rm.MemoryCalls</td></tr>
+        <tr><td>Ошибки вызовов</td><td>@_lm.Errors</td><td>@_rm.Errors</td></tr>
+        <tr><td>Входные токены API</td><td>@Count(_lm.PromptTokens)</td><td>@Count(_rm.PromptTokens)</td></tr>
+        <tr><td>Выходные токены API</td><td>@Count(_lm.CompletionTokens)</td><td>@Count(_rm.CompletionTokens)</td></tr>
+        <tr><td>Токены поддержки памяти</td><td>@Count(_lm.MemoryTokens)</td><td>@Count(_rm.MemoryTokens)</td></tr>
+        <tr><td>Суммарное время API</td><td>@_lm.TotalApiSeconds.ToString("F2") с</td><td>@_rm.TotalApiSeconds.ToString("F2") с</td></tr>
+        <tr><td>Расчётная стоимость</td><td>@Cost(_lm.EstimatedRubles)</td><td>@Cost(_rm.EstimatedRubles)</td></tr>
+        <tr><td>Дата тарифов</td><td>@_left.PricingSnapshot</td><td>@_right.PricingSnapshot</td></tr>
+    </tbody></table></section>
+    @if (_left.BenchmarkId != _right.BenchmarkId || _left.ScenarioVersion != _right.ScenarioVersion || _left.ScorerVersion != _right.ScorerVersion) { <p class="callout">Прогоны используют разные эксперименты или версии методики. Их метрики описывают разные условия.</p> }
+    <p class="muted">«Н/д» означает, что usage или тарифы доступны не для всех вызовов. Расчётная стоимость не равна фактическому списанию.</p>
+    <div class="two-columns"><section class="panel"><h2>Отчёт A</h2><pre class="report-preview">@_leftReport</pre></section><section class="panel"><h2>Отчёт B</h2><pre class="report-preview">@_rightReport</pre></section></div>
+}
+@code {
+    [Parameter] public string LeftId { get; set; } = "";
+    [Parameter] public string RightId { get; set; } = "";
+    private BenchmarkRun? _left, _right;
+    private RunMetrics? _lm, _rm;
+    private string _leftReport = "", _rightReport = "";
+    private string? _error;
+    protected override async Task OnParametersSetAsync()
+    {
+        try { _left = await Store.GetAsync(LeftId); _right = await Store.GetAsync(RightId); _lm = await Metrics.ReadAsync(LeftId); _rm = await Metrics.ReadAsync(RightId); _leftReport = await Report(LeftId); _rightReport = await Report(RightId); }
+        catch (Exception e) { _error = e.Message; }
+    }
+    private async Task<string> Report(string id) { var path = Path.Combine(Store.GetArtifactsDirectory(id), "report.md"); return File.Exists(path) && new FileInfo(path).Length <= 1_048_576 ? await File.ReadAllTextAsync(path) : "Отчёт пока недоступен."; }
+    private static string Count(long? value) => value?.ToString("N0") ?? "Н/д";
+    private static string Cost(decimal? value) => value?.ToString("F6") + (value.HasValue ? " ₽" : "Н/д");
+}

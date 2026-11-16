@@ -1,0 +1,65 @@
+@page "/experiments"
+@rendermode InteractiveServer
+@inject BenchmarkRegistry Registry
+@inject BenchmarkQueue Queue
+@inject FileRunStore Store
+@inject IWorkspaceClient Workspace
+@inject NavigationManager Navigation
+
+<PageTitle>Эксперименты — UniversalAI</PageTitle>
+<div class="eyebrow">ВОСПРОИЗВОДИМЫЕ СРАВНЕНИЯ</div><h1>Эксперименты</h1><p class="muted">Выберите задание, настройте модель и запустите отдельный прогон.</p>
+@if (_error != null) { <p class="alert" role="alert">@_error</p> }
+<div class="experiment-layout">
+<section class="panel stack">
+    <h2>Новый прогон</h2>
+    <label>Эксперимент<select @bind="_benchmark" @bind:after="SelectBenchmark">@foreach (var definition in Registry.List()) { <option value="@definition.Id">@definition.Id.ToUpperInvariant() · @definition.Name</option> }</select></label>
+    <p class="muted">@Selected.Description</p>
+    <label>Подключение<select @bind="_provider" @bind:after="SelectProvider">@foreach (var p in _providers.Where(p => p.Type == "OpenAICompatible")) { <option value="@p.Id">@p.Name</option> }</select></label>
+    @if (Selected.HasModel) { <label>Модель<input @bind="_model" placeholder="ID модели на выбранном сервере" /></label> }
+    @if (Selected.HasReasoning) { <label>Максимальный reasoning<input @bind="_effort" placeholder="Автоматически по профилю модели" /></label> }
+    @if (Selected.HasMemory)
+    {
+        <div class="form-row"><label>Последние сообщения<input type="number" min="2" @bind="_keep" /></label><label>Пакет сжатия<input type="number" min="1" @bind="_batch" /></label></div>
+        <label class="check"><input type="checkbox" @bind="_generate" /> Создать новый общий диалог</label>
+        <label class="check"><input type="checkbox" @bind="_branches" /> Проверять независимые ветки</label>
+    }
+    <p class="callout">Вызовы выбранной модели могут быть платными. Прогон продолжится на сервере после закрытия страницы.</p>
+    <button disabled="@_busy" @onclick="Submit">@(_busy ? "Добавляем…" : "Запустить эксперимент ↗")</button>
+</section>
+<section class="panel"><div class="section-heading"><div><h2>История прогонов</h2><p class="muted">@_runs.Count запусков</p></div><button class="secondary" @onclick="Refresh">Обновить</button></div>
+    @if (_runs.Count == 0) { <div class="empty"><span>⌁</span><h3>Здесь появятся результаты</h3><p>Каждый запуск сохраняется отдельно, включая ошибки и частичные ответы.</p></div> }
+    @if (_runs.Count > 1) { <div class="compare-bar"><span class="muted">Отметьте два прогона для сравнения</span><button class="secondary" disabled="@(_compare.Count != 2)" @onclick="Compare">Сравнить (@_compare.Count/2)</button></div> }
+    @foreach (var run in _runs)
+    {
+        <div class="run-row"><input type="checkbox" aria-label="@($"Сравнить {run.Id}")" checked="@_compare.Contains(run.Id)" @onchange="() => Toggle(run.Id)" /><a class="run-main" href="@($"/runs/{run.Id}")"><strong>@run.BenchmarkId.ToUpperInvariant() <span class="muted">· @run.Model</span></strong><small>@run.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm") · @run.CompletedCalls вызовов</small></a><span class="badge @run.Status.ToString().ToLowerInvariant()">@RunLabels.Status(run.Status)</span></div>
+    }
+</section>
+</div>
+@code {
+    private string _benchmark = "day9", _provider = "proxyapi", _model = "openai/gpt-4o-mini", _effort = "";
+    private int _keep = 6, _batch = 10;
+    private bool _generate, _branches = true, _busy;
+    private string? _error;
+    private IReadOnlyList<ProviderInfo> _providers = [];
+    private IReadOnlyList<BenchmarkRun> _runs = [];
+    private readonly HashSet<string> _compare = [];
+    private BenchmarkDefinition Selected => Registry.Get(_benchmark).Definition;
+    protected override async Task OnInitializedAsync() { try { _providers = await Workspace.ProvidersAsync(); await Refresh(); } catch (Exception e) { _error = e.Message; } }
+    private async Task Refresh() { try { _runs = await Store.ListAsync(); } catch (Exception e) { _error = e.Message; } }
+    private void SelectProvider() { _model = _providers.First(p => p.Id == _provider).DefaultModel; if (_provider == "proxyapi" && _benchmark is "day9" or "day10") _model = "openai/gpt-4o-mini"; }
+    private void SelectBenchmark() { if (_benchmark == "day5") _provider = "proxyapi"; SelectProvider(); }
+    private async Task Submit()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var run = await Queue.SubmitAsync(_benchmark, new BenchmarkSettings { ProviderId = _provider, Model = Selected.HasModel ? _model : null,
+                HighEffort = string.IsNullOrWhiteSpace(_effort) ? null : _effort, Keep = _keep, Batch = _batch, Generate = _generate, Branches = _branches });
+            Navigation.NavigateTo($"/runs/{run.Id}");
+        }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
+    private void Toggle(string id) { if (!_compare.Remove(id) && _compare.Count < 2) _compare.Add(id); }
+    private void Compare() { var ids = _compare.ToArray(); Navigation.NavigateTo($"/compare/{ids[0]}/{ids[1]}"); }
+}

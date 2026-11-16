@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <ProjectReference Include="..\UniversalAI.Engine\UniversalAI.Engine.csproj" />
+    <ProjectReference Include="..\UniversalAI.Benchmarks\UniversalAI.Benchmarks.csproj" />
+    <Content Include="..\..\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\appsettings.local.json" Condition="Exists('..\..\appsettings.local.json')" Link="appsettings.local.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

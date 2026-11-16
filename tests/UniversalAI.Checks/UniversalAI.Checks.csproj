@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\UniversalAI.Engine\UniversalAI.Engine.csproj" />
+    <ProjectReference Include="..\..\src\UniversalAI.Benchmarks\UniversalAI.Benchmarks.csproj" />
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Content Include="..\..\appsettings.json" Link="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

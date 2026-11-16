@@ -1,0 +1,19 @@
+@inherits LayoutComponentBase
+@inject UniversalAI.Web.WorkspaceAccess Access
+
+<div class="shell">
+    <aside class="sidebar">
+        <a class="brand" href="/"><span class="brand-icon">U</span><span>UniversalAI<small>Рабочее пространство</small></span></a>
+        <div class="nav-caption">ЛАБОРАТОРИЯ</div>
+        <nav aria-label="Основная навигация">
+            <NavLink href="/" Match="NavLinkMatch.All"><span>◫</span> Обзор</NavLink>
+            <NavLink href="/chat"><span>◌</span> Диалоги</NavLink>
+            <NavLink href="/experiments"><span>⌁</span> Эксперименты</NavLink>
+            <NavLink href="/providers"><span>⊞</span> Подключения</NavLink>
+        </nav>
+        <div class="sidebar-footer"><span class="status-dot"></span> Общее ядро · .NET 10<br /><small>CLI и веб · одно рабочее пространство</small>
+        @if (!string.IsNullOrWhiteSpace(Access.Token)) { <form action="/auth/logout" method="post"><AntiforgeryToken /><button class="text-button" type="submit">Выйти</button></form> }
+        </div>
+    </aside>
+    <main><div class="topbar"><span>UNIVERSALAI / LAB</span><span class="pill">Учебный проект</span></div><div class="page">@Body</div></main>
+</div>

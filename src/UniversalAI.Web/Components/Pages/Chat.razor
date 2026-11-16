@@ -1,0 +1,69 @@
+@page "/chat"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject IWorkspaceClient Workspace
+
+<PageTitle>Диалоги — UniversalAI</PageTitle>
+<div class="eyebrow">АГЕНТЫ И КОНТЕКСТ</div><div class="page-heading"><div><h1>Диалоги</h1><p class="muted">История, память и трасса каждого ответа.</p></div><button @onclick="New" disabled="@_busy">Новый диалог +</button></div>
+@if (_error != null) { <p class="alert" role="alert">@_error</p> }
+<div class="chat-layout">
+<aside class="panel conversation-list">@if (_conversations.Count == 0) { <p class="muted">Создайте первый диалог.</p> }@foreach (var c in _conversations) { <button class="conversation-item @(c.Id == _current?.Id ? "selected" : "")" disabled="@_busy" @onclick="() => Open(c.Id)"><strong>@c.Title</strong><small>@c.Model</small></button> }</aside>
+<div>
+@if (_current != null)
+{
+    <section class="panel stack">
+        <div class="section-heading"><h2>@_current.Title</h2><div class="actions"><button class="secondary" disabled="@_busy" @onclick="Branch">Создать ветку</button><button class="secondary" disabled="@_busy" @onclick="RefreshCurrent">Обновить</button></div></div>
+        <div class="form-row"><label>Подключение<select @bind="_provider" disabled="@_busy" @bind:after="ProviderChanged">@foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }</select></label><label>Агент<select @bind="_agent" disabled="@_busy">@foreach (var a in _agents) { <option value="@a.Id">@a.Name</option> }</select></label><label>Память<select @bind="_memory" disabled="@_busy"><option>Summary</option><option>SlidingWindow</option><option>StickyFacts</option></select></label></div>
+        <div class="form-row"><label>Модель<input @bind="_model" disabled="@_busy" /></label><label>Температура<input type="number" step="0.1" min="0" max="2" @bind="_temperature" disabled="@_busy" /></label><label>Лимит ответа<input type="number" min="1" @bind="_maxTokens" disabled="@_busy" /></label></div>
+        <details><summary>Параметры контекста</summary><div class="form-row"><label>Последние сообщения<input type="number" min="2" @bind="_keep" /></label><label>Пакет summary<input type="number" min="1" @bind="_batch" /></label><label class="check"><input type="checkbox" @bind="_enabled" /> Память включена</label></div><label>Системный промпт<textarea rows="3" @bind="_prompt"></textarea></label></details>
+        <div><button class="secondary" disabled="@_busy" @onclick="Save">Сохранить настройки</button></div>
+    </section>
+    <section class="panel messages" aria-live="polite">
+        @if (_total > _messages.Count) { <button class="secondary" disabled="@_busy" @onclick="LoadEarlier">Показать предыдущие сообщения (@(_total - _messages.Count))</button> }
+        @if (_messages.Count == 0) { <div class="empty"><span>◌</span><h3>Начните разговор</h3><p>Выберите подключение и модель, затем отправьте сообщение.</p></div> }
+        @foreach (var message in _messages) { <article class="message @message.Role"><div class="message-role">@(message.Role == "user" ? "ВЫ" : message.Role == "assistant" ? "АССИСТЕНТ" : message.Role.ToUpperInvariant())</div><div class="message-content">@message.Content</div>@if (message.ToolCalls?.Count > 0) { <details><summary>Вызовы инструментов</summary><pre>@JsonSerializer.Serialize(message.ToolCalls, new JsonSerializerOptions { WriteIndented = true })</pre></details> }</article> }
+        @if (_busy) { <p class="muted">Ожидаем ответ модели…</p> }
+    </section>
+    <section class="panel composer"><label class="sr-only" for="message">Сообщение</label><textarea id="message" @bind="_input" rows="3" placeholder="Введите сообщение…" disabled="@_busy"></textarea><div class="section-heading"><span class="muted">@_model</span>@if (_busy) { <button class="secondary" @onclick="Cancel">Отменить ожидание</button> } else { <button disabled="@string.IsNullOrWhiteSpace(_input)" @onclick="Send">Отправить ↑</button> }</div></section>
+    <section class="panel"><details><summary>Память диалога</summary><h3>Summary</h3><pre>@(_current.Summary ?? "Пока не создано")</pre><h3>Sticky Facts</h3><pre>@_current.FactsJson</pre></details></section>
+    @if (_turn != null) { <section class="panel"><h2>Последний ход</h2><p>Токены API: @_turn.TokenUsage.PromptTokens вход / @_turn.TokenUsage.CompletionTokens выход. Циклы инструментов: @_turn.ToolRounds.</p>@if (_turn.Context != null) { <p class="muted">Оценка истории: @_turn.Context.RawHistoryTokens → @_turn.Context.EffectiveHistoryTokens токенов.</p> }<details><summary>Трасса и статистика</summary><pre>@JsonSerializer.Serialize(_turn, new JsonSerializerOptions { WriteIndented = true })</pre></details></section> }
+}
+</div></div>
+@code {
+    private IReadOnlyList<ConversationInfo> _conversations = [];
+    private IReadOnlyList<ProviderInfo> _providers = [];
+    private IReadOnlyList<AgentInfo> _agents = [];
+    private List<UniversalAI.Core.ChatMessage> _messages = [];
+    private ConversationInfo? _current;
+    private AgentTurnResult? _turn;
+    private string _provider = "", _model = "", _agent = "direct", _memory = "Summary", _prompt = "", _input = "";
+    private int _keep = 6, _batch = 10, _maxTokens = 10000, _total;
+    private double _temperature = 0.7;
+    private bool _enabled = true, _busy;
+    private string? _error;
+    private CancellationTokenSource? _request;
+    protected override async Task OnInitializedAsync() { try { _providers = await Workspace.ProvidersAsync(); _agents = await Workspace.AgentsAsync(); _conversations = await Workspace.ListAsync(); if (_conversations.Count > 0) await Open(_conversations[0].Id); } catch (Exception e) { _error = e.Message; } }
+    private void Fill(ConversationInfo c) { _current = c; _provider = c.ProviderProfileId ?? _providers[0].Id; _model = c.Model; _agent = c.AgentId; _memory = c.MemoryStrategy; _keep = c.Keep; _batch = c.Batch; _enabled = c.CompressionEnabled; _temperature = c.Temperature; _maxTokens = c.MaxTokens; _prompt = c.SystemPrompt; }
+    private async Task Open(int id)
+    {
+        try { Fill(await Workspace.GetAsync(id)); var first = await Workspace.MessagesAsync(id, limit: 1); _total = first.Total; var page = await Workspace.MessagesAsync(id, Math.Max(0, _total - 100)); _messages = page.Items.ToList(); _turn = null; }
+        catch (Exception e) { _error = e.Message; }
+    }
+    private async Task New() { try { var c = await Workspace.CreateAsync(new()); _conversations = await Workspace.ListAsync(); await Open(c.Id); } catch (Exception e) { _error = e.Message; } }
+    private async Task RefreshCurrent() { if (_current != null) { await Open(_current.Id); _conversations = await Workspace.ListAsync(); } }
+    private async Task LoadEarlier() { if (_current == null) return; try { var page = await Workspace.MessagesAsync(_current.Id, Math.Max(0, _total - _messages.Count - 100), Math.Min(100, _total - _messages.Count)); _messages.InsertRange(0, page.Items); } catch (Exception e) { _error = e.Message; } }
+    private void ProviderChanged() { var p = _providers.First(p => p.Id == _provider); _model = p.DefaultModel; if (!p.SupportsTools) _agent = "direct"; }
+    private async Task Save() { try { _error = null; await SaveCore(); } catch (Exception e) { _error = e.Message; } }
+    private async Task SaveCore() { if (_current == null) return; Fill(await Workspace.UpdateAsync(_current.Id, new(Model: _model, AgentId: _agent, ProviderId: _provider, MemoryStrategy: _memory, CompressionEnabled: _enabled, Keep: _keep, Batch: _batch, Temperature: _temperature, MaxTokens: _maxTokens, SystemPrompt: _prompt))); }
+    private async Task Branch() { if (_current == null) return; try { var c = await Workspace.BranchAsync(_current.Id, _current.Title + " (ветка)"); _conversations = await Workspace.ListAsync(); await Open(c.Id); } catch (Exception e) { _error = e.Message; } }
+    private async Task Send()
+    {
+        if (_current == null || _busy) return; _busy = true; _error = null; _request = new();
+        try { await SaveCore(); var turn = await Workspace.SendAsync(_current.Id, _input, _request.Token); _input = ""; await Open(_current.Id); _turn = turn; _conversations = await Workspace.ListAsync(); }
+        catch (OperationCanceledException) { _error = "Ожидание отменено. Отправленный текст сохранён в поле ввода."; }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; _request.Dispose(); _request = null; }
+    }
+    private void Cancel() => _request?.Cancel();
+    public void Dispose() => _request?.Cancel();
+}
