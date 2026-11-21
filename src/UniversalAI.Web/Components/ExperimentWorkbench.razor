@@ -2,101 +2,168 @@
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 
-<div class="workbench">
+<div class="workbench @(Playback.ShowingAll ? "showing-all" : "is-replaying")">
     <div class="stage-strip" aria-label="Этапы эксперимента">
-        <button class="stage-follow @(_step == null ? "selected" : "")" aria-pressed="@(_step == null)" @onclick="FollowStage">@(Active ? "● Текущий этап" : "↗ Последний этап")</button>
+        <button class="stage-follow" @onclick="FollowStage">@(Active ? "● Текущий этап" : "↗ Последний этап")</button>
         @foreach (var stage in Data.Steps)
         {
             <button class="stage-chip @(CurrentStep?.Id == stage.Id ? "selected" : "")" aria-pressed="@(CurrentStep?.Id == stage.Id)" @onclick="() => SelectStep(stage.Id)">
                 <span class="stage-index">@(Data.Steps.IndexOf(stage) + 1)</span><span><strong>@stage.Title</strong><small>@stage.Description</small></span>
-                <span class="stage-count">@Data.Calls.Count(c => c.Step == stage.Id && c.Response != null)</span>
+                <span class="stage-count" title="Сохранённые ответы этапа">@Data.Calls.Count(c => c.Step == stage.Id && c.Response != null)</span>
             </button>
         }
     </div>
-    <div class="workbench-summary">
-        <div><span class="workbench-eyebrow">@(Active && _step == null ? "СЕЙЧАС ВЫПОЛНЯЕТСЯ" : "ПРОСМОТР СОХРАНЁННОГО ЭТАПА")</span><h3>@(CurrentStep?.Title ?? "Подготовка эксперимента")</h3><p>@(CurrentStep?.Description ?? "Ожидаем первые записанные обращения к модели.")</p></div>
-        @if (Data.Layers is { } layers)
-        {
-            <div class="probe-progress"><strong>@layers.Observations.Count<span> / 24</span></strong><small>проверок выполнено · @layers.Observations.Count(o => o.Passed) пройдено</small><progress value="@layers.Observations.Count" max="24" aria-label="Выполненные проверки"></progress></div>
-        }
-        else { <div class="probe-progress"><strong>@StepCalls.Count(c => c.Response != null)<span> ответов</span></strong><small>@StepCalls.Count(c => c.Kind == "memory") обращений к памяти</small></div> }
+    <div class="playback-bar" aria-label="Управление плавным просмотром">
+        <div class="playback-now"><span class="playback-orbit @(Playback.Playing && !Playback.ShowingAll ? "is-playing" : "")">@(Playback.ShowingAll ? "≡" : "▶")</span><div><span class="workbench-eyebrow">@PlaybackStatus</span><h3>@(CurrentStep?.Title ?? "Подготовка эксперимента")</h3></div><span class="playback-position" title="Показанные запросы / записанные запросы">@Playback.ShownResults <span>/ @Playback.Total</span></span></div>
+        <div class="playback-controls">
+            <button class="screen-button playback-primary" aria-label="@PlayLabel" disabled="@(!string.IsNullOrWhiteSpace(Search))" @onclick="TogglePlayback">@(Playback.Playing && !Playback.ShowingAll && !Playback.AtEnd ? "Ⅱ Пауза" : "▶ Смотреть")</button>
+            <button class="screen-button" aria-label="Следующий шаг" title="Показать следующий вопрос, ответ или оценку" disabled="@(!CanAdvance)" @onclick="Next">Шаг →</button>
+            <label class="playback-speed"><span class="sr-only">Скорость просмотра</span><select value="@Playback.Speed.ToString(CultureInfo.InvariantCulture)" @onchange="ChangeSpeed"><option value="0.5">×0,5</option><option value="1">×1</option><option value="2">×2</option></select></label>
+            <button class="screen-button playback-restart" aria-label="Повторить сначала" title="Воспроизвести сохранённые события без запросов к модели" disabled="@(!string.IsNullOrWhiteSpace(Search))" @onclick="Restart"><span aria-hidden="true">↺</span><span class="restart-text">Сначала</span></button>
+            <button class="screen-button playback-skip" aria-label="Показать всё" disabled="@Playback.ShowingAll" @onclick="ShowAll">Показать всё ↗</button>
+        </div>
     </div>
+    <div class="playback-track" role="progressbar" aria-label="Позиция просмотра" aria-valuenow="@Playback.ShownResults" aria-valuemin="0" aria-valuemax="@Math.Max(1, Playback.Total)"><span style="width:@(Playback.Total == 0 ? 0 : 100 * Playback.ShownResults / Playback.Total)%"></span></div>
     @foreach (var notice in Data.Notices.Distinct()) { <p class="evidence-notice" role="status">@notice</p> }
     <div class="workbench-columns @(_mobileInspector ? "show-inspector" : "")">
         <section class="dialogue-pane" aria-label="Диалог эксперимента">
-            <header class="pane-heading"><div><span class="pane-icon">◌</span><strong>Диалог</strong><span class="pane-counter">@StepCalls.Count(c => c.Kind != "memory")</span></div><button class="screen-button mobile-inspect" @onclick="() => _mobileInspector = true">Контекст и события →</button><span class="pane-caption">Вопрос → ответ → проверка</span></header>
+            <header class="pane-heading"><div><span class="pane-icon">◌</span><strong>Диалог</strong><span class="pane-counter">@RevealedCalls.Count(c => c.Kind != "memory") / @StepCalls.Count(c => c.Kind != "memory")</span></div><button class="screen-button mobile-inspect" @onclick="() => _mobileInspector = true">Контекст и события →</button><span class="pane-caption">Вопрос → ответ → проверка</span></header>
             <div class="conversation-stream" @ref="_stream" tabindex="0" aria-label="Вопросы и ответы этапа">
-                @if (!VisibleCalls.Any())
+                @if (!Playback.ShowingAll && Playback.Phase == ExperimentPlayback.Reveal.Stage && string.IsNullOrWhiteSpace(Search))
                 {
-                    <div class="workbench-empty"><span>◌</span><h3>@(string.IsNullOrWhiteSpace(Search) ? "Диалог появится здесь" : "Совпадений нет")</h3><p>@(StepCalls.Any(c => c.Kind == "memory") ? "На этом этапе модель обрабатывает память. События показаны в инспекторе." : "Каждый запрос и ответ будут показаны отдельной карточкой.")</p></div>
+                    <div class="stage-arrival reveal-enter" @key="CurrentStep?.Id"><span class="stage-arrival-number">@(CurrentStep == null ? "◌" : (Data.Steps.IndexOf(CurrentStep) + 1).ToString("D2"))</span><span class="workbench-eyebrow">@(Playback.Playing ? "ПЕРЕХОД К ЭТАПУ" : "ЭТАП ВЫБРАН · ПРОСМОТР НА ПАУЗЕ")</span><h3>@(CurrentStep?.Title ?? "Ожидание первого события")</h3><p>@(CurrentStep?.Description ?? "Новые запросы появятся здесь по мере выполнения.")</p><small>Контекст и изменения памяти — в инспекторе →</small></div>
+                }
+                else if (!VisibleCalls.Any() && Playback.Current?.Kind != "memory")
+                {
+                    <div class="workbench-empty"><span>◌</span><h3>@(string.IsNullOrWhiteSpace(Search) ? "Диалог появится здесь" : "Совпадений нет")</h3><p>Запросы и ответы сохраняются независимо от скорости просмотра.</p></div>
                 }
                 @foreach (var call in VisibleCalls)
                 {
-                    <article class="exchange @(SelectedCall?.Number == call.Number ? "is-inspected" : "")" @key="call.Number">
+                    <article class="exchange reveal-enter @(SelectedCall?.Number == call.Number ? "is-inspected" : "")" @key="call.Number">
                         <div class="exchange-heading"><span>ЗАПРОС @call.Number.ToString("D2")</span><span>@call.Request.Model</span><button class="inspect-call" aria-label="@($"Контекст запроса {call.Number}")" aria-pressed="@(SelectedCall?.Number == call.Number)" @onclick="() => Inspect(call.Number)">Контекст ↗</button></div>
-                        <div class="speech speech-user"><span class="speaker-avatar">В</span><div><span class="speaker-label">Вопрос / вход</span><div class="speech-text">@Display(Question(call))</div></div></div>
-                        <div class="speech speech-assistant"><span class="speaker-avatar">AI</span><div><span class="speaker-label">Модель</span><div class="speech-text">@Display(call.Response?.Content ?? call.Error ?? (Active ? "Ожидание ответа…" : "Ответ не сохранён · прогон остановлен или прерван"))</div></div></div>
-                        @if (call.Expected != null)
-                        { <div class="expectation"><span>Ожидалось</span><strong>@Display(call.Expected)</strong></div> }
-                        <footer class="exchange-footer"><span class="result-pill @(call.Error != null || call.Passed == false ? "result-failed" : call.Passed == true ? "result-passed" : "")">@(call.Error != null ? "Ошибка API" : call.Passed == true ? "✓ Проверка пройдена" : call.Passed == false ? "! Проверка не пройдена" : call.Response != null ? "Ответ получен" : Active ? "Выполняется" : "Нет ответа")</span><span>@Usage(call)@Seconds(call)</span></footer>
+                        <div class="speech speech-user"><span class="speaker-avatar">В</span><div><span class="speaker-label">Вопрос / вход</span><div class="speech-text">@Question(call)</div></div></div>
+                        @if (Playback.AnswerVisible(call))
+                        {
+                            <div class="speech speech-assistant reveal-enter"><span class="speaker-avatar">AI</span><div><span class="speaker-label">Модель</span><div class="speech-text">@(call.Response?.Content ?? call.Error ?? (Active ? "Ожидание ответа…" : "Ответ не сохранён · прогон остановлен или прерван"))</div></div></div>
+                        }
+                        else
+                        {
+                            <div class="answer-pending reveal-enter" role="status"><span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>@(call.Response != null || call.Error != null ? "Ответ сохранён · пауза перед показом" : Active ? "Ожидаем ответ API" : "Переходим к результату запроса")</span></div>
+                        }
+                        @if (Playback.ResultVisible(call))
+                        {
+                            @if (call.Expected != null) { <div class="expectation reveal-enter"><span>Ожидалось</span><strong>@call.Expected</strong></div> }
+                            <footer class="exchange-footer reveal-enter"><span class="result-pill @(call.Error != null || call.Passed == false ? "result-failed" : call.Passed == true ? "result-passed" : "")">@(call.Error != null ? "Ошибка API" : call.Passed == true ? "✓ Проверка пройдена" : call.Passed == false ? "! Проверка не пройдена" : call.Response != null ? "Ответ получен" : Active ? "Выполняется" : "Нет ответа")</span><span>@Usage(call)@Seconds(call)</span></footer>
+                        }
                     </article>
+                }
+                @if (!Playback.ShowingAll && Playback.Current is { Kind: "memory" } memory && Playback.QuestionVisible(memory))
+                {
+                    <article class="memory-interlude reveal-enter" @key="memory.Number"><span>⌘</span><div><h3>Обработка памяти</h3><p>@(Playback.AnswerVisible(memory) ? "Результат показан в техническом инспекторе." : memory.Response != null ? "Результат уже сохранён. Показываем событие последовательно." : Active ? "Ожидаем ответ API для обновления памяти." : "Показываем сохранённое состояние запроса.")</p><button class="text-button" @onclick="() => Inspect(memory.Number)">Разобрать событие →</button></div></article>
                 }
             </div>
         </section>
         <aside class="inspector-pane" aria-label="Технический разбор">
             <header class="pane-heading"><div><span class="pane-icon">⌘</span><strong>Контекст и события</strong></div><button class="screen-button mobile-inspect" @onclick="() => _mobileInspector = false">← Диалог</button><span class="pane-caption">Инспектор</span></header>
             <div class="inspector-scroll" tabindex="0">
-                <ExperimentContext Data="Data" Step="CurrentStep" Call="SelectedCall" />
-                <section class="inspector-section"><div class="inspector-section-title"><span>СОБЫТИЯ ЭТАПА</span><span>@StepCalls.Count</span></div>
-                    @if (StepCalls.Count == 0) { <p class="inspector-note">Записанные события появятся после начала выполнения.</p> }
-                    @foreach (var call in StepCalls)
+                <div class="context-reveal reveal-enter" @key="CurrentStep?.Id"><ExperimentContext Data="Data" Step="CurrentStep" Call="InspectionCall" /></div>
+                <section class="inspector-section"><div class="inspector-section-title"><span>ПОКАЗАННЫЕ СОБЫТИЯ ЭТАПА</span><span>@RevealedCalls.Count / @StepCalls.Count</span></div>
+                    @if (RevealedCalls.Count == 0) { <p class="inspector-note">События появятся по ходу просмотра. «Показать всё» открывает запись целиком.</p> }
+                    @foreach (var call in RevealedCalls)
                     {
-                        <button class="event-row @(SelectedCall?.Number == call.Number ? "selected" : "")" @onclick="() => Inspect(call.Number, false)"><span class="event-symbol @(call.Kind == "memory" ? "memory-event" : "")">@(call.Error != null ? "!" : call.Kind == "memory" ? "⌘" : "↗")</span><span><strong>@(call.Kind == "memory" ? "Обновление памяти" : "Запрос модели") <small>#@call.Number</small></strong><small>@(call.Error != null ? "Ошибка · подробности в запросе" : call.Response != null ? "Ответ сохранён" : Active ? "Выполняется" : "Ответ не сохранён")@Seconds(call)</small></span></button>
+                        <button class="event-row reveal-enter @(SelectedCall?.Number == call.Number ? "selected" : "")" @key="call.Number" @onclick="() => Inspect(call.Number, false)"><span class="event-symbol @(call.Kind == "memory" ? "memory-event" : "")">@(Playback.AnswerVisible(call) && call.Error != null ? "!" : call.Kind == "memory" ? "⌘" : "↗")</span><span><strong>@(call.Kind == "memory" ? "Обновление памяти" : "Запрос модели") <small>#@call.Number</small></strong><small>@(Playback.AnswerVisible(call) ? call.Error != null ? "Ошибка · подробности в запросе" : call.Response != null ? "Ответ показан" : Active ? "Ожидание API" : "Ответ не сохранён" : "Запрос показан · ответ далее")</small></span></button>
                     }
                 </section>
             </div>
         </aside>
     </div>
-    <footer class="console-footer"><span>Источник: сохранённые запросы и ответы API</span><span>Выберите запрос, чтобы разобрать его контекст</span></footer>
+    <footer class="console-footer"><span>Сервер: @Data.Calls.Count(c => c.Response != null || c.Error != null) завершённых обращений · @(Active ? "эксперимент выполняется" : "запись остановлена или завершена")</span><span>@(Playback.ShowingAll ? "Весь сохранённый вывод · без задержек" : "Пауза и скорость управляют только просмотром")</span></footer>
 </div>
 
 @code {
     [Parameter, EditorRequired] public ExperimentViewData Data { get; set; } = new();
+    [Parameter] public ExperimentPlayback Playback { get; set; } = new();
+    [Parameter] public bool EnablePlayback { get; set; } = true;
     [Parameter] public string Search { get; set; } = "";
     [Parameter] public bool Follow { get; set; }
     [Parameter] public bool Active { get; set; }
     private string? _step;
+    private string _lastSearch = "";
     private int? _call;
-    private bool _mobileInspector, _scrollPending = true;
-    private bool _initialized, _wasFollowing;
-    private int _lastCount;
+    private bool _mobileInspector, _scrollPending = true, _wasFollowing, _disposed;
+    private double _elapsed;
+    private readonly CancellationTokenSource _lifetime = new();
+    private Task? _timer;
     private ElementReference _stream;
     private IJSObjectReference? _module;
-    private ExperimentViewData.Step? CurrentStep => Data.Steps.FirstOrDefault(s => s.Id == _step) ?? Data.Steps.LastOrDefault();
+    private ExperimentViewData.Step? CurrentStep => Data.Steps.FirstOrDefault(s => s.Id == (Playback.ShowingAll ? _step ?? Playback.StageId : Playback.StageId)) ?? Data.Steps.FirstOrDefault();
     private List<ExperimentViewData.Call> StepCalls => Data.Calls.Where(c => c.Step == CurrentStep?.Id).ToList();
-    private ExperimentViewData.Call? SelectedCall => StepCalls.FirstOrDefault(c => c.Number == _call) ??
-        (_step == null && Active ? StepCalls.LastOrDefault(c => c.Kind != "memory") ?? StepCalls.LastOrDefault() : StepCalls.FirstOrDefault(c => c.Kind != "memory") ?? StepCalls.FirstOrDefault());
-    private IEnumerable<ExperimentViewData.Call> VisibleCalls => StepCalls.Where(c => c.Kind != "memory" && (string.IsNullOrWhiteSpace(Search) || Question(c).Contains(Search, StringComparison.OrdinalIgnoreCase) || (c.Response?.Content.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false) || (c.Expected?.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false)));
+    private List<ExperimentViewData.Call> RevealedCalls => StepCalls.Where(Playback.QuestionVisible).ToList();
+    private ExperimentViewData.Call? SelectedCall => RevealedCalls.FirstOrDefault(c => c.Number == _call) ?? RevealedCalls.FirstOrDefault(c => c.Number == Playback.Current?.Number) ?? RevealedCalls.FirstOrDefault();
+    private ExperimentViewData.Call? InspectionCall => SelectedCall is { } call ? call with { Response = Playback.AnswerVisible(call) ? call.Response : null, Error = Playback.AnswerVisible(call) ? call.Error : null, Expected = Playback.ResultVisible(call) ? call.Expected : null, Passed = Playback.ResultVisible(call) ? call.Passed : null } : null;
+    private IEnumerable<ExperimentViewData.Call> VisibleCalls => RevealedCalls.Where(c => c.Kind != "memory" && (string.IsNullOrWhiteSpace(Search) || Question(c).Contains(Search, StringComparison.OrdinalIgnoreCase) || (c.Response?.Content.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false) || (c.Expected?.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false)));
+    private bool CanAdvance => !Playback.ShowingAll && !Playback.AtEnd && Playback.Current != null && !(Playback.Phase == ExperimentPlayback.Reveal.Question && Playback.Current.Response == null && Playback.Current.Error == null && Active);
+    private string PlayLabel => Playback.ShowingAll || Playback.AtEnd ? "Начать воспроизведение" : Playback.Playing ? "Пауза просмотра" : "Продолжить просмотр";
+    private string PlaybackStatus => Playback.ShowingAll ? "ВЕСЬ СОХРАНЁННЫЙ ВЫВОД" : Playback.AtEnd ? "ПРОСМОТР ЗАВЕРШЁН" : !Playback.Playing ? "ПРОСМОТР НА ПАУЗЕ" : Playback.Current == null ? "ОЖИДАЕМ СОБЫТИЯ" : Playback.Phase switch { ExperimentPlayback.Reveal.Stage => "ПЛАВНЫЙ ПРОСМОТР · ЭТАП", ExperimentPlayback.Reveal.Question => "ПЛАВНЫЙ ПРОСМОТР · ВОПРОС", ExperimentPlayback.Reveal.Answer => "ПЛАВНЫЙ ПРОСМОТР · ОТВЕТ", _ => "ПЛАВНЫЙ ПРОСМОТР · РЕЗУЛЬТАТ" };
     private static string Question(ExperimentViewData.Call call) => call.Request.Messages.LastOrDefault(m => m.Role == "user")?.Content ?? call.Request.Messages.LastOrDefault()?.Content ?? "Пустой вход";
-    private static string Display(string text) => text;
     private static string Usage(ExperimentViewData.Call call) => call.Response is { } r && (r.PromptTokens > 0 || r.CompletionTokens > 0) ? $"{r.PromptTokens} вх. / {r.CompletionTokens} вых. токенов" : "usage Н/д";
     private static string Seconds(ExperimentViewData.Call call) => call.Seconds is { } seconds ? $" · {seconds:F1} с" : "";
     protected override void OnParametersSet()
     {
-        if (!_initialized && Data.Steps.Count > 0) { if (!Active) _step = Data.Steps[0].Id; _initialized = true; }
+        Playback.Update(Data.Calls, Active);
+        if (!EnablePlayback) Playback.RevealAll();
+        if (Search != _lastSearch && !string.IsNullOrWhiteSpace(Search)) ShowAll();
+        _lastSearch = Search;
         if (Follow && !_wasFollowing) _scrollPending = true;
         _wasFollowing = Follow;
-        if (_lastCount != Data.Calls.Count) { _lastCount = Data.Calls.Count; _scrollPending = true; }
     }
-    private void SelectStep(string id) { _step = id; _call = null; _scrollPending = true; }
-    private void FollowStage() { _step = null; _call = null; _scrollPending = true; }
-    private void Inspect(int number, bool mobile = true) { _call = number; if (mobile) _mobileInspector = true; }
+    private void SelectStep(string id) { _step = id; _call = null; _elapsed = 0; Playback.SeekStage(id); _scrollPending = true; }
+    private void FollowStage() { ShowAll(); _step = Data.Steps.LastOrDefault()?.Id; }
+    private void Inspect(int number, bool mobile = true) { Playback.Pause(); _call = number; if (mobile) _mobileInspector = true; }
+    private void ShowAll() { _step = CurrentStep?.Id; Playback.RevealAll(); _elapsed = 0; _scrollPending = true; }
+    private void Restart() { Playback.Restart(); _call = null; _step = null; _elapsed = 0; _scrollPending = true; }
+    private void TogglePlayback() { if (Playback.Playing && !Playback.ShowingAll && !Playback.AtEnd) Playback.Pause(); else { Playback.Play(); _elapsed = 0; _call = null; } }
+    private void Next() { Playback.Pause(); Playback.Advance(); _elapsed = 0; _call = null; _scrollPending = true; }
+    private void ChangeSpeed(ChangeEventArgs args) { if (double.TryParse(args.Value?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var speed) && speed is 0.5 or 1 or 2) Playback.Speed = speed; }
+    private async Task AnimateAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(200));
+        long previous = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_lifetime.Token))
+            {
+                double seconds = System.Diagnostics.Stopwatch.GetElapsedTime(previous).TotalSeconds;
+                previous = System.Diagnostics.Stopwatch.GetTimestamp();
+                await InvokeAsync(() =>
+                {
+                    if (_disposed || !Playback.Playing || Playback.ShowingAll) return;
+                    _elapsed += seconds * Playback.Speed;
+                    if (_elapsed < Playback.DwellSeconds) return;
+                    bool playing = Playback.Playing;
+                    bool changed = Playback.Advance();
+                    _elapsed = 0;
+                    if (changed) { _call = null; _scrollPending = true; }
+                    if (changed || playing != Playback.Playing) StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender && EnablePlayback) _timer = AnimateAsync();
         if (!_scrollPending || !Follow || !string.IsNullOrWhiteSpace(Search)) return;
         _scrollPending = false;
-        try { _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./experiment-screen.js"); await _module.InvokeVoidAsync("followOutput", _stream); }
+        try { _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./experiment-screen.js"); await _module.InvokeVoidAsync("followOutput", _stream, !Playback.ShowingAll); }
         catch (JSDisconnectedException) { }
     }
-    public async ValueTask DisposeAsync() { if (_module != null) try { await _module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        await _lifetime.CancelAsync();
+        if (_timer != null) await _timer;
+        _lifetime.Dispose();
+        if (_module != null) try { await _module.DisposeAsync(); } catch (JSDisconnectedException) { }
+    }
 }

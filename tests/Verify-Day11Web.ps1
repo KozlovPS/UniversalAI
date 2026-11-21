@@ -52,11 +52,12 @@ try {
     $html = [Net.WebUtility]::HtmlDecode((Invoke-WebRequest "$base/chat" -WebSession $session).Content)
     Check ($html.Contains('Слои памяти') -and $html.Contains('Сохранить рабочую память') -and $html.Contains('Очистить долговременную память')) 'Chat renders separate layer editors and clear actions'
     $html = [Net.WebUtility]::HtmlDecode((Invoke-WebRequest "$base/runs/$runId" -WebSession $session).Content)
-    Check ($html.Contains('Демонстрация эксперимента') -and $html.Contains('Память и этапы') -and $html.Contains('НЕИЗВЕСТНО') -and $html.Contains('Режим записи')) 'Recorded run renders demonstration console, memory tab and model answers'
+    Check ($html.Contains('Демонстрация эксперимента') -and $html.Contains('Память и этапы') -and $html.Contains('ПЛАВНЫЙ ПРОСМОТР') -and $html.Contains('Режим записи')) 'Recorded run renders staged playback, memory tab and recording mode'
     [IO.File]::WriteAllText((Join-Path $checkDirectory 'run-page.html'), $html)
     $cleared = Invoke-RestMethod "$base/api/conversations/$($chat.id)/settings" -Headers $headers -Method Put -ContentType 'application/json' -Body '{"clearShortTerm":true,"workingMemoryJson":"{}"}'
     Check ($cleared.workingMemoryJson -eq '{}' -and $cleared.factsJson.Contains('Марина')) 'Clearing short/working layers via HTTP preserves long-term facts'
-    foreach ($asset in @('experiment-screen.css', 'experiment-screen.js', 'workbench.css')) {
+    Check ($html.Contains('Итоговый отчёт') -and $html.Contains('Задание дня') -and $html.Contains('Сценарий эксперимента')) 'Report, assignment and scenario tabs are available'
+    foreach ($asset in @('experiment-screen.css', 'experiment-screen.js', 'workbench.css', 'experiment-documents.css')) {
         $assetResponse = Invoke-WebRequest "$base/$asset"
         Check ($assetResponse.StatusCode -eq 200 -and $assetResponse.RawContentLength -gt 50) "Demonstration asset available: $asset"
     }

@@ -47,6 +47,10 @@ public sealed class BenchmarkRunner(BenchmarkRegistry registry, FileRunStore sto
         Directory.CreateDirectory(directory);
         await using var log = new StreamWriter(Path.Combine(store.GetDirectory(run.Id), "output.log"), append: false, new UTF8Encoding(false)) { AutoFlush = true };
         var writer = new TeeWriter(log, console);
+        var materials = BenchmarkMaterialsCatalog.Create(registry.Get(run.BenchmarkId).Definition);
+        // Save before the first API call, after each benchmark's empty-directory check.
+        var saveMaterials = new Lazy<Task>(() => File.WriteAllTextAsync(Path.Combine(directory, "experiment-materials.json"),
+            JsonSerializer.Serialize(materials, FileRunStore.Json), CancellationToken.None));
         try
         {
             ct.ThrowIfCancellationRequested();
@@ -58,7 +62,7 @@ public sealed class BenchmarkRunner(BenchmarkRegistry registry, FileRunStore sto
             {
                 run = run with { CompletedCalls = run.CompletedCalls + 1 };
                 await store.SaveAsync(run, CancellationToken.None);
-            });
+            }, () => saveMaterials.Value);
             int code = await registry.Get(run.BenchmarkId).ExecuteAsync(run.Settings, new BenchmarkExecutionContext
             {
                 Directory = directory, Profile = new(run.Provider.Name, run.Provider.BaseUrl, run.Provider.ApiKeyEnvironmentVariable ?? "", run.Provider.ModelCapabilities),
@@ -82,6 +86,7 @@ public sealed class BenchmarkRunner(BenchmarkRegistry registry, FileRunStore sto
             run = run with { FinishedAt = DateTimeOffset.UtcNow };
             await store.SaveAsync(run, CancellationToken.None);
             await File.WriteAllTextAsync(Path.Combine(directory, "pricing.json"), JsonSerializer.Serialize(PricingCatalog.Default, FileRunStore.Json));
+            await saveMaterials.Value;
         }
         return run;
     }
@@ -94,7 +99,7 @@ public sealed class BenchmarkRunner(BenchmarkRegistry registry, FileRunStore sto
     }
 
     private sealed class RecordingProvider(IAIProvider inner, string directory, CancellationToken runToken,
-        Func<Task> progress) : IAIProvider
+        Func<Task> progress, Func<Task> saveMaterials) : IAIProvider
     {
         private int _number;
         public string Name => inner.Name;
@@ -103,6 +108,7 @@ public sealed class BenchmarkRunner(BenchmarkRegistry registry, FileRunStore sto
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(runToken, cancellationToken);
             linked.Token.ThrowIfCancellationRequested();
+            await saveMaterials();
             int number = ++_number;
             var clock = Stopwatch.StartNew();
             string kind = request.Messages.FirstOrDefault()?.Content is { } prompt &&

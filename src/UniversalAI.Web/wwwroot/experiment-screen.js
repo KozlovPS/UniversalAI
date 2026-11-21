@@ -1,5 +1,7 @@
-export function followOutput(element) {
-    if (element) element.scrollTop = element.scrollHeight;
+export function followOutput(element, smooth = false) {
+    if (!element) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    element.scrollTo({ top: element.scrollHeight, behavior: smooth && !reduced ? 'smooth' : 'instant' });
 }
 
 const recordingHandlers = new WeakMap();

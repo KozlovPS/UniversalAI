@@ -1,0 +1,17 @@
+<div class="experiment-document lesson-document">
+    <header class="document-heading"><div><div class="document-kicker">@BenchmarkId.ToUpperInvariant() · ЗАДАНИЕ ДНЯ</div><h2>@Documents.Materials.Title</h2><p>Что требовалось реализовать и проверить</p></div><span class="document-symbol">↗</span></header>
+    @if (Documents.Materials.Assignment is { Length: > 0 } assignment)
+    {
+        <div class="document-source">@Documents.Materials.AssignmentSource</div>
+        @if (!Documents.HasSavedMaterials) { <p class="document-note">В этом архиве нет отдельного снимка задания. Показан добавленный текст задания дня; материалы и результаты самого прогона находятся в соседних вкладках.</p> }
+        <section class="document-section assignment-text"><ReadableReport Text="@assignment" /></section>
+    }
+    else
+    {
+        <div class="document-empty"><span>↗</span><h3>Исходное задание пока не добавлено</h3><p>Полная формулировка этого учебного дня появится после её добавления. Использованные задачи, факты и вопросы уже можно посмотреть во вкладке «Сценарий эксперимента».</p></div>
+    }
+</div>
+@code {
+    [Parameter, EditorRequired] public ExperimentDocuments Documents { get; set; } = new();
+    [Parameter] public string BenchmarkId { get; set; } = "";
+}

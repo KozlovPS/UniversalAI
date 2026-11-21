@@ -1,0 +1,71 @@
+using UniversalAI.Benchmarks;
+
+namespace UniversalAI.Benchmarks.Runtime;
+
+/// <summary>User-facing lesson and input evidence, frozen as experiment-materials.json before execution.</summary>
+public sealed record ExperimentMaterials
+{
+    public int SchemaVersion { get; init; } = 1;
+    public string Title { get; init; } = "";
+    public string Goal { get; init; } = "";
+    public string? Assignment { get; init; }
+    public string? AssignmentSource { get; init; }
+    public List<string> Plan { get; init; } = [];
+    public List<ExperimentMaterialGroup> Groups { get; init; } = [];
+}
+public sealed record ExperimentMaterialGroup(string Title, string Description, List<ExperimentMaterialItem> Items);
+public sealed record ExperimentMaterialItem(string Label, string Text, string? Expected = null);
+
+public static class BenchmarkMaterialsCatalog
+{
+    public static ExperimentMaterials Create(BenchmarkDefinition definition)
+    {
+        var materials = new ExperimentMaterials { Title = definition.Name, Goal = definition.Description };
+        if (definition.Id is "day3" or "day5")
+        {
+            materials = materials with { Plan = definition.Id == "day5"
+                ? ["Один набор задач передаётся каждой сравниваемой модели.", "Ответы проверяются по сохранённым эталонам.", "Сравниваются точность, usage, время и расчётная стоимость."]
+                : ["Одни задачи решаются разными стратегиями промптинга и уровнями reasoning.", "Сохраняются исходные ответы и результаты оценивания."] };
+            materials.Groups.Add(new("Проверочные задачи", "Один и тот же набор для сравниваемых вариантов.",
+                Day3TaskSet.Tasks.Select(t => new ExperimentMaterialItem(t.Id, t.Question, string.Join(" / ", t.ExpectedAnswers))).ToList()));
+        }
+        if (definition.Id == "day4")
+            materials = materials with { Plan = ["Сравнить ответы при разных значениях temperature.", "Повторить запросы и оценить правильность, формат и разнообразие."] };
+        if (definition.Id is "day9" or "day10")
+            materials = materials with { Plan = ["Подготовить общий диалог и сохранить исходные материалы.", "Проверить сохранение фактов при разных способах работы с контекстом.", "Сопоставить ответы с эталонами и измерениями расхода API."] };
+        if (definition.Id == "day11")
+        {
+            materials = materials with
+            {
+                AssignmentSource = "Задание пользователя · DAYS.md, День 11 · копия от 22.11.2026",
+                Assignment = """
+                    Опишите и реализуйте модель памяти для ассистента.
+
+                    Разделите информацию минимум на 3 типа:
+                    - краткосрочная (текущий диалог)
+                    - рабочая (данные текущей задачи)
+                    - долговременная (профиль, решения, знания)
+
+                    Сделайте так, чтобы:
+                    - разные типы памяти хранились отдельно
+                    - вы явно выбирали, что и куда сохраняется
+                    - facts из Дня 10 стали основой долговременной памяти
+                    - для каждого слоя было правило, что именно из него попадает в промпт
+
+                    Проверьте:
+                    - какие данные попадают в каждый слой
+                    - сколько токенов добавляет каждый слой к запросу
+                    - очистите слои по очереди и зафиксируйте, на какие вопросы агент перестаёт отвечать
+
+                    Результат: агент с явной моделью памяти (memory layers).
+                    """,
+                Plan = ["Заполнить диалог, рабочую память и долговременные facts.", "Задать шесть независимых контрольных вопросов.", "Очистить диалог, затем рабочую память, затем facts; после каждого шага повторить вопросы.", "Ответы проверок не записывать обратно в память."]
+            };
+            materials.Groups.Add(new("Текущий диалог", "Исходные реплики до очистки.", Day11MemoryLayersBenchmark.InitialHistory().Select(m => new ExperimentMaterialItem(m.Role, m.Content)).ToList()));
+            materials.Groups.Add(new("Рабочая память", "Данные текущей задачи.", Day11MemoryLayersBenchmark.InitialWorking().Select(p => new ExperimentMaterialItem(p.Key, p.Value)).ToList()));
+            materials.Groups.Add(new("Долговременные facts", "Явно сохранённые знания.", Day11MemoryLayersBenchmark.InitialLongTerm().Select(p => new ExperimentMaterialItem(p.Key, p.Value)).ToList()));
+            materials.Groups.Add(new("Контрольные вопросы", "После удаления источника ожидается НЕИЗВЕСТНО.", Day11MemoryLayersBenchmark.Probes.Select(p => new ExperimentMaterialItem(p.Layer, p.Question, p.Value)).ToList()));
+        }
+        return materials;
+    }
+}

@@ -18,7 +18,10 @@
     <nav class="screen-tabs" aria-label="Информация эксперимента">
         <button class="@TabClass("log")" aria-pressed='@(_tab == "log")' @onclick='() => SelectTab("log")'>Ход эксперимента <span>@Data.Calls.Count</span></button>
         @if (Memory != null && ShowMemory) { <button class="@TabClass("memory")" aria-pressed='@(_tab == "memory")' @onclick='() => SelectTab("memory")'>Память и этапы</button> }
-        <button class="@TabClass("results")" aria-pressed='@(_tab == "results")' @onclick='() => SelectTab("results")'>Результаты <span>@ArtifactCount</span></button>
+        <button class="@TabClass("report")" aria-pressed='@(_tab == "report")' @onclick='() => SelectTab("report")'>Итоговый отчёт</button>
+        <button class="@TabClass("lesson")" aria-pressed='@(_tab == "lesson")' @onclick='() => SelectTab("lesson")'>Задание дня</button>
+        <button class="@TabClass("scenario")" aria-pressed='@(_tab == "scenario")' @onclick='() => SelectTab("scenario")'>Сценарий эксперимента</button>
+        <button class="@TabClass("results")" aria-pressed='@(_tab == "results")' @onclick='() => SelectTab("results")'>Файлы <span>@ArtifactCount</span></button>
         <button class="@TabClass("settings")" aria-pressed='@(_tab == "settings")' @onclick='() => SelectTab("settings")'>Условия</button>
     </nav>
     @if (_tab == "log")
@@ -34,7 +37,7 @@
         @if (_structured)
         {
             @if (Data.Calls.Count == 0 && !string.IsNullOrWhiteSpace(Log)) { <div class="evidence-notice">Структурированные запросы ещё не записаны или отсутствуют в этом архиве. <button class="text-button" @onclick="() => SetView(false)">Открыть полный исходный журнал →</button></div> }
-            <ExperimentWorkbench @key="Run.Id" Data="Data" Search="@_search" Follow="_follow" Active="Active" />
+            <ExperimentWorkbench @key="Run.Id" Data="Data" Playback="_playback" Search="@_search" Follow="_follow" Active="Active" />
         }
         else
         {
@@ -57,6 +60,9 @@
     {
         <div class="screen-detail-viewport" tabindex="0">
             @if (_tab == "memory") { @Memory }
+            @if (_tab == "report") { @Report }
+            @if (_tab == "lesson") { @Lesson }
+            @if (_tab == "scenario") { @Scenario }
             @if (_tab == "results") { @Results }
             @if (_tab == "settings") { @Settings }
         </div>
@@ -72,6 +78,9 @@
     [Parameter] public DateTimeOffset? UpdatedAt { get; set; }
     [Parameter] public string? RefreshError { get; set; }
     [Parameter] public RenderFragment? Memory { get; set; }
+    [Parameter] public RenderFragment? Report { get; set; }
+    [Parameter] public RenderFragment? Lesson { get; set; }
+    [Parameter] public RenderFragment? Scenario { get; set; }
     [Parameter] public bool ShowMemory { get; set; }
     [Parameter] public RenderFragment? Results { get; set; }
     [Parameter] public RenderFragment? Settings { get; set; }
@@ -85,12 +94,13 @@
     private IJSObjectReference? _module;
     private DotNetObjectReference<ExperimentScreen>? _reference;
     private bool _syncedRecording;
+    private ExperimentPlayback _playback = new();
     private bool Active => Run.Status is RunStatus.Running or RunStatus.Queued;
     private IEnumerable<Line> VisibleLines => string.IsNullOrWhiteSpace(_search) ? _lines : _lines.Where(l => l.Text.Contains(_search, StringComparison.OrdinalIgnoreCase) || l.ReadableText.Contains(_search, StringComparison.OrdinalIgnoreCase));
     private string TabClass(string name) => _tab == name ? "is-selected" : "";
     protected override void OnParametersSet()
     {
-        if (_runId != Run.Id) { _runId = Run.Id; _tab = "log"; _search = ""; _source = ""; _lines.Clear(); _follow = Active; _structured = true; }
+        if (_runId != Run.Id) { _runId = Run.Id; _tab = "log"; _search = ""; _source = ""; _lines.Clear(); _follow = true; _structured = true; _playback = new(); }
         if (_source == Log) return;
         _source = Log;
         _lines = Log.Replace("\r\n", "\n").Split('\n').Select((text, index) => new Line(index + 1, text, Readable(text), Classify(text))).ToList();

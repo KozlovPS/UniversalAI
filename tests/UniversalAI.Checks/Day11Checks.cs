@@ -81,6 +81,11 @@ internal static class Day11Checks
         run = await runner.ExecuteAsync(run);
         string path = await store.ArtifactPathAsync(run.Id, "report.json");
         var report = JsonSerializer.Deserialize<Day11MemoryLayersBenchmark.Report>(await File.ReadAllTextAsync(path))!;
+        var materials = JsonSerializer.Deserialize<ExperimentMaterials>(
+            await File.ReadAllTextAsync(await store.ArtifactPathAsync(run.Id, "experiment-materials.json")), FileRunStore.Json)!;
+        Check(materials.SchemaVersion == 1 && materials.Assignment?.Contains("Разделите информацию") == true &&
+            materials.Groups.SelectMany(g => g.Items).Any(i => i.Text.Contains("СОСНА-731")),
+            "Материалы и задание Day-11 сохраняются в артефактах конкретного прогона");
         Check(run.Status == RunStatus.Completed && run.CompletedCalls == 24 && report.Completed &&
             report.Observations.Count == 24 && report.Observations.All(o => o.Passed),
             "Day-11: 24 независимых вопроса на 4 этапах, сохранение/забывание проверены раздельно");
