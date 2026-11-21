@@ -1,0 +1,99 @@
+@using UniversalAI.Core
+
+@if (Data.Presentation?.Stages.FirstOrDefault(s => s.Id == Step?.Id) is { } stage && (stage.Changes.Count > 0 || stage.Metrics.Count > 0))
+{
+    <section class="inspector-section"><div class="inspector-section-title"><span>РЕЗУЛЬТАТЫ ЭТАПА</span><span>Сохранённые данные</span></div>
+        @foreach (var metric in stage.Metrics) { <div class="stage-metric"><span>@metric.Label</span><strong>@metric.Value</strong>@if (metric.Note != null) { <small>@metric.Note</small> }</div> }
+        @foreach (var change in stage.Changes) { <div class="stage-change"><h4>@change.Label</h4><div><span>Было</span><p>@change.Before</p></div><div><span>Стало</span><p>@change.After</p></div></div> }
+    </section>
+}
+@if (Snapshot is { } snapshot)
+{
+    <section class="inspector-section">
+        <div class="inspector-section-title"><span>ПАМЯТЬ ПО ЭТАПАМ</span><span>Layered</span></div>
+        <h3>@ExperimentViewData.LayerStageName(snapshot.Stage)</h3>
+        <p class="inspector-note">@(PreviousSnapshot == null ? "Исходное состояние: три независимых слоя памяти заполнены." : "Сравнение с предыдущим сохранённым этапом. Удалённые данные больше не входят в запрос.")</p>
+        <div class="layer-comparison">
+            @foreach (var layer in LayerRows(snapshot))
+            {
+                <div class="layer-row @(layer.Before > layer.After ? "has-removal" : "")"><span>@layer.Name<small>@layer.Unit</small></span><strong>@layer.Before <span>→</span> @layer.After</strong><div class="layer-meter"><span style="width:@(layer.Before == 0 ? 0 : 100 * layer.After / layer.Before)%"></span></div></div>
+            }
+        </div>
+        <p class="token-note">~@snapshot.Tokens.Total токенов памяти · локальная оценка, отдельно от usage API</p>
+        @if (PreviousSnapshot is { } before)
+        {
+            @foreach (var message in before.ShortTerm.Where(m => !snapshot.ShortTerm.Any(n => Same(m, n)))) { <div class="removed-evidence"><span>− Удалено из диалога</span><p>@message.Content</p></div> }
+            @foreach (var item in before.Working.Where(p => !snapshot.Working.ContainsKey(p.Key))) { <div class="removed-evidence"><span>− Удалено из рабочей памяти</span><p>@item.Key: @item.Value</p></div> }
+            @foreach (var item in before.LongTerm.Where(p => !snapshot.LongTerm.ContainsKey(p.Key))) { <div class="removed-evidence"><span>− Удалено из facts</span><p>@item.Key: @item.Value</p></div> }
+        }
+        <details class="evidence-details"><summary>Содержимое слоёв на этом этапе</summary>
+            @foreach (var message in snapshot.ShortTerm) { <div class="context-message"><span>@message.Role · диалог</span><p>@message.Content</p></div> }
+            @foreach (var item in snapshot.Working) { <div class="context-message"><span>Рабочая память · @item.Key</span><p>@item.Value</p></div> }
+            @foreach (var item in snapshot.LongTerm) { <div class="context-message"><span>Facts · @item.Key</span><p>@item.Value</p></div> }
+            @if (snapshot.ShortTerm.Count + snapshot.Working.Count + snapshot.LongTerm.Count == 0) { <p class="inspector-note">Все слои пусты. В запросе остаются системное правило и текущий вопрос.</p> }
+        </details>
+    </section>
+}
+@if (Call is { } call)
+{
+    <section class="inspector-section">
+        <div class="inspector-section-title"><span>КОНТЕКСТ ЗАПРОСА #@call.Number</span><span>@(call.Kind == "memory" ? "Память" : "Ответ")</span></div>
+        @if (Archive is { } archive)
+        {
+            var comparison = Compare(archive, ContextMessages);
+            <h3>@StrategyTitle</h3>
+            <p class="inspector-note">@(StrategyTitle == "SlidingWindow" ? "Окно оставляет последние сообщения. Ранние реплики остаются в архиве, но модель их не видит." : "Архив диалога и фактический контекст запроса. Facts или summary показаны отдельно в системных сообщениях.")</p>
+            <div class="context-counts"><div><strong>@archive.Count</strong><span>было в архиве</span></div><span>→</span><div><strong>@comparison.Count(m => m.Included)</strong><span>реплик в запросе</span></div></div>
+            <div class="message-ribbon" aria-label="Реплики архива и их доступность модели">
+                @foreach (var row in comparison) { <span class="@(row.Included ? "retained" : "excluded")" title="@($"{row.Index + 1}: {(row.Included ? "в запросе" : "вне контекста")}")">@(row.Index + 1)</span> }
+            </div>
+            <div class="ribbon-key"><span>▰ В запросе</span><span>▱ Вне контекста · @comparison.Count(m => !m.Included)</span></div>
+            <details class="evidence-details"><summary>Было → стало: все реплики</summary>
+                @foreach (var row in comparison) { <div class="context-message @(row.Included ? "kept-message" : "excluded-message")"><span>@(row.Included ? "✓ В запросе" : "− Вне контекста") · @(row.Index + 1) · @row.Message.Role</span><p>@row.Message.Content</p></div> }
+            </details>
+        }
+        else if (Snapshot == null)
+        { <h3>Что видит модель</h3><p class="inspector-note">Фактические сообщения из сохранённого запроса. Снимок архива для сравнения отсутствует.</p> }
+        <div class="request-composition"><span>@call.Request.Messages.Count сообщений в запросе</span><span>@call.Request.Messages.Count(m => m.Role == "system") системных</span></div>
+        <details class="evidence-details"><summary>Полный состав запроса к модели</summary>
+            @foreach (var message in call.Request.Messages) { <div class="context-message"><span>@message.Role</span><p>@message.Content</p></div> }
+            <p class="inspector-note">Модель: @call.Request.Model · temperature: @(call.Request.Temperature?.ToString() ?? "Н/д") · max tokens: @(call.Request.MaxTokens?.ToString() ?? "Н/д")</p>
+        </details>
+        @if (call.Kind == "memory" && call.Response != null) { <div class="memory-result"><span>Результат обработки памяти</span><p>@call.Response.Content</p></div> }
+        @if (call.Error != null) { <p class="evidence-notice" role="status">@call.Error</p> }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public ExperimentViewData Data { get; set; } = new();
+    [Parameter] public ExperimentViewData.Step? Step { get; set; }
+    [Parameter] public ExperimentViewData.Call? Call { get; set; }
+    private UniversalAI.Benchmarks.Day11MemoryLayersBenchmark.Snapshot? Snapshot => Data.Layers?.Snapshots.FirstOrDefault(s => s.Stage == Step?.Id);
+    private UniversalAI.Benchmarks.Day11MemoryLayersBenchmark.Snapshot? PreviousSnapshot => Snapshot is { } s && Data.Layers is { } r && r.Snapshots.IndexOf(s) > 0 ? r.Snapshots[r.Snapshots.IndexOf(s) - 1] : null;
+    private string StrategyTitle => Step?.Id.Split('/')[0] ?? "Контекст";
+    private List<ChatMessage>? Archive => Call?.Kind == "answer" && Step?.Id.EndsWith("/base/comparison", StringComparison.Ordinal) == true && Data.Checkpoints.TryGetValue(StrategyTitle, out var state) ? state.History : null;
+    private List<ChatMessage> ContextMessages => Call?.Request.Messages.Skip(1).SkipLast(1).ToList() ?? [];
+    private static bool Same(ChatMessage a, ChatMessage b) => a.Role == b.Role && a.Content == b.Content;
+    private static List<(int Index, ChatMessage Message, bool Included)> Compare(List<ChatMessage> archive, List<ChatMessage> context)
+    {
+        var available = context.Where(m => m.Role != "system").ToList();
+        List<(int, ChatMessage, bool)> rows = [];
+        // Align from the newest end: identical acknowledgements in old turns must
+        // not be highlighted instead of the acknowledgements actually kept in the tail.
+        for (int i = archive.Count - 1; i >= 0; i--)
+        {
+            int match = available.FindLastIndex(m => Same(m, archive[i]));
+            rows.Add((i, archive[i], match >= 0));
+            if (match >= 0) available.RemoveRange(match, available.Count - match);
+        }
+        rows.Reverse();
+        return rows;
+    }
+    private IEnumerable<(string Name, string Unit, int Before, int After)> LayerRows(UniversalAI.Benchmarks.Day11MemoryLayersBenchmark.Snapshot current)
+    {
+        var previous = PreviousSnapshot ?? current;
+        yield return ("Диалог", "сообщений", previous.ShortTerm.Count, current.ShortTerm.Count);
+        yield return ("Рабочая память", "записей", previous.Working.Count, current.Working.Count);
+        yield return ("Долговременные facts", "записей", previous.LongTerm.Count, current.LongTerm.Count);
+    }
+}

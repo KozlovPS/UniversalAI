@@ -167,6 +167,7 @@ Check((await workspace.ListAsync()).Count == 0 && (await store.ListAsync()).Coun
     "Изменение учебной схемы пересоздаёт только БД и сохраняет файлы прогонов");
 
 await Day11Checks.RunAsync(root);
+await ExperimentPresentationChecks.RunAsync(root);
 Console.WriteLine($"Все проверки приложения пройдены. Артефакты: {root}");
 
 static void Check(bool value, string message) { if (!value) throw new InvalidOperationException(message); Console.WriteLine("OK: " + message); }

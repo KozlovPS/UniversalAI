@@ -9,7 +9,7 @@
 @if (_error != null && _run == null) { <p class="alert" role="alert">@_error</p> }
 @if (_run != null)
 {
-    <ExperimentScreen Run="_run" Log="@_log" Duration="@Duration" ArtifactCount="_artifacts.Count" UpdatedAt="_updatedAt" RefreshError="@_error" ShowMemory='@(_run.BenchmarkId == "day11")'>
+    <ExperimentScreen Run="_run" Data="_view" Log="@_log" Duration="@Duration" ArtifactCount="_artifacts.Count" UpdatedAt="_updatedAt" RefreshError="@_error" ShowMemory='@(_run.BenchmarkId == "day11")'>
         <Actions>@if (_run.Status is RunStatus.Running or RunStatus.Queued) { <button class="screen-button" @onclick="Cancel">Остановить</button> }<button class="screen-button screen-refresh" @onclick="Refresh">Обновить</button></Actions>
         <Memory>@if (_run.BenchmarkId == "day11") { <Day11Progress Report="_day11" /> } else { <p>Дополнительный разбор доступен в журнале и сохранённых отчётах.</p> }</Memory>
         <Results>
@@ -27,6 +27,7 @@
     private string? _preview, _error;
     private DateTimeOffset? _updatedAt;
     private UniversalAI.Benchmarks.Day11MemoryLayersBenchmark.Report? _day11;
+    private ExperimentViewData _view = new();
     private readonly CancellationTokenSource _lifetime = new();
     private Task? _polling;
     private string Duration => _run?.StartedAt is { } start ? ((_run.FinishedAt ?? DateTimeOffset.UtcNow) - start).ToString(@"hh\:mm\:ss") : "—";
@@ -45,16 +46,8 @@
             _run = await Store.GetAsync(Id, _lifetime.Token);
             _artifacts = await Store.ArtifactsAsync(Id, _lifetime.Token);
             _log = await UniversalAI.Web.WorkspaceApi.ReadLogTailAsync(Path.Combine(Store.GetDirectory(Id), "output.log"), _lifetime.Token, full: true);
-            if (_run.BenchmarkId == "day11" && _artifacts.Contains("report.json"))
-            {
-                try
-                {
-                    var json = await File.ReadAllTextAsync(await Store.ArtifactPathAsync(Id, "report.json"), _lifetime.Token);
-                    _day11 = JsonSerializer.Deserialize<UniversalAI.Benchmarks.Day11MemoryLayersBenchmark.Report>(json);
-                }
-                catch (System.Text.Json.JsonException) { /* Retry an in-progress report write on the next refresh. */ }
-                catch (IOException) { /* Writer may briefly own the report file. */ }
-            }
+            _view = await ExperimentViewData.LoadAsync(Store, _run, _artifacts, _lifetime.Token, _day11);
+            _day11 = _view.Layers ?? _day11;
             _updatedAt = DateTimeOffset.UtcNow;
             _error = null;
             StateHasChanged();

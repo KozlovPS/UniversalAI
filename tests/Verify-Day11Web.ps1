@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory)][string]$RunDirectory,
-    [int]$Port = 5088
+    [int]$Port = 5088,
+    [string]$WebDirectory = 'src/UniversalAI.Web/bin/Debug/net10.0'
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -15,7 +16,7 @@ $start.UseShellExecute = $false
 $start.CreateNoWindow = $true
 $start.RedirectStandardOutput = $true
 $start.RedirectStandardError = $true
-$start.WorkingDirectory = Join-Path $projectRoot 'src/UniversalAI.Web/bin/Debug/net10.0'
+$start.WorkingDirectory = [IO.Path]::GetFullPath((Join-Path $projectRoot $WebDirectory))
 $start.ArgumentList.Add((Join-Path $start.WorkingDirectory 'UniversalAI.Web.dll'))
 $start.ArgumentList.Add('--urls')
 $start.ArgumentList.Add("http://127.0.0.1:$Port")
@@ -55,7 +56,7 @@ try {
     [IO.File]::WriteAllText((Join-Path $checkDirectory 'run-page.html'), $html)
     $cleared = Invoke-RestMethod "$base/api/conversations/$($chat.id)/settings" -Headers $headers -Method Put -ContentType 'application/json' -Body '{"clearShortTerm":true,"workingMemoryJson":"{}"}'
     Check ($cleared.workingMemoryJson -eq '{}' -and $cleared.factsJson.Contains('Марина')) 'Clearing short/working layers via HTTP preserves long-term facts'
-    foreach ($asset in @('experiment-screen.css', 'experiment-screen.js')) {
+    foreach ($asset in @('experiment-screen.css', 'experiment-screen.js', 'workbench.css')) {
         $assetResponse = Invoke-WebRequest "$base/$asset"
         Check ($assetResponse.StatusCode -eq 200 -and $assetResponse.RawContentLength -gt 50) "Demonstration asset available: $asset"
     }
@@ -66,7 +67,7 @@ try {
     $tailLog = (Invoke-WebRequest "$base/api/runs/$runId/log" -Headers $headers).Content
     Check (!$tailLog.Contains('BEGIN_FULL_LOG') -and $tailLog.Contains('END_FULL_LOG')) 'Default API log tail remains backward compatible'
     $html = [Net.WebUtility]::HtmlDecode((Invoke-WebRequest "$base/runs/$runId" -WebSession $session).Content)
-    Check ($html.Contains('BEGIN_FULL_LOG') -and $html.Contains('END_FULL_LOG')) 'Demonstration page includes the entire log'
+    Check ($html.Contains('Исходный журнал') -and $html.Contains('Разбор')) 'Demonstration page provides structured and complete raw journal views'
     $rawHtml = (Invoke-WebRequest "$base/runs/$runId" -WebSession $session).Content
     Check (!$rawHtml.Contains("<script>alert('unsafe')</script>")) 'Log contents are HTML encoded'
     $download = Invoke-WebRequest "$base/logs/$runId" -WebSession $session

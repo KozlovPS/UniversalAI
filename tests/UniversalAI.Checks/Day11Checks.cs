@@ -7,6 +7,7 @@ using UniversalAI.Configuration;
 using UniversalAI.Core;
 using UniversalAI.Core.Capabilities;
 using UniversalAI.Providers;
+using UniversalAI.Providers.OpenAICompatible;
 using UniversalAI.Services;
 using UniversalAI.Services.Context;
 using UniversalAI.Services.Providers;
@@ -83,6 +84,17 @@ internal static class Day11Checks
         Check(run.Status == RunStatus.Completed && run.CompletedCalls == 24 && report.Completed &&
             report.Observations.Count == 24 && report.Observations.All(o => o.Passed),
             "Day-11: 24 независимых вопроса на 4 этапах, сохранение/забывание проверены раздельно");
+        Check(fake.Requests.All(r => r.MaxTokens == null && r.ReasoningBudgetTokens == null),
+            "Day-11 не задаёт лимит ответа или бюджет reasoning без запроса пользователя");
+        Check(run.ScenarioVersion == "2" && report.ScenarioVersion == run.ScenarioVersion,
+            "Day-11: версия сценария без лимита согласована в метаданных и отчёте");
+        using (var http = new HttpClient(new UnlimitedRequestHandler()))
+        {
+            var transport = new OpenAICompatibleProvider(http, new() { Name = "Offline-wire", BaseUrl = "http://localhost/v1",
+                RequireApiKey = false, ApiKeyEnvironmentVariable = "", ModelCapabilities = new() });
+            await transport.SendMessageAsync(fake.Requests[0]);
+        }
+        Console.WriteLine("OK: Day-11: HTTP-запрос не содержит max_tokens, max_completion_tokens и reasoning_budget_tokens");
         Check(report.Snapshots.Count == 4 && report.Snapshots[0].Tokens.Total > 0 && report.Snapshots[3].Tokens.Total == 0 &&
             report.Snapshots[1].Tokens.ShortTerm == 0 && report.Snapshots[2].Tokens.Working == 0,
             "Оценки слоёв обнуляются после их очистки; снимки сохранены");
@@ -108,6 +120,19 @@ internal static class Day11Checks
 
     private sealed class MemoryFactory(MemoryProvider provider) : IProviderFactory
     { public IAIProvider Create(ProviderProfile profile) => provider; }
+    private sealed class UnlimitedRequestHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            using var json = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(ct));
+            Check(!json.RootElement.TryGetProperty("max_tokens", out _) &&
+                !json.RootElement.TryGetProperty("max_completion_tokens", out _) &&
+                !json.RootElement.TryGetProperty("reasoning_budget_tokens", out _),
+                "Провайдер не подставляет ограничение в HTTP-запрос Day-11");
+            return new(System.Net.HttpStatusCode.OK) { Content = new StringContent(
+                """{"choices":[{"message":{"content":"НЕИЗВЕСТНО"},"finish_reason":"stop"}]}""", System.Text.Encoding.UTF8, "application/json") };
+        }
+    }
     private sealed class MemoryProvider : IAIProvider
     {
         public List<ChatRequest> Requests { get; } = [];

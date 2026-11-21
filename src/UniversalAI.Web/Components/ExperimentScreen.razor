@@ -16,7 +16,7 @@
     @if (Run.Error != null) { <div class="screen-notice" role="status">@Run.Error</div> }
     @if (RefreshError != null) { <div class="screen-notice" role="alert">@RefreshError · Показаны последние полученные данные.</div> }
     <nav class="screen-tabs" aria-label="Информация эксперимента">
-        <button class="@TabClass("log")" aria-pressed='@(_tab == "log")' @onclick='() => SelectTab("log")'>Журнал <span>@_lines.Count</span></button>
+        <button class="@TabClass("log")" aria-pressed='@(_tab == "log")' @onclick='() => SelectTab("log")'>Ход эксперимента <span>@Data.Calls.Count</span></button>
         @if (Memory != null && ShowMemory) { <button class="@TabClass("memory")" aria-pressed='@(_tab == "memory")' @onclick='() => SelectTab("memory")'>Память и этапы</button> }
         <button class="@TabClass("results")" aria-pressed='@(_tab == "results")' @onclick='() => SelectTab("results")'>Результаты <span>@ArtifactCount</span></button>
         <button class="@TabClass("settings")" aria-pressed='@(_tab == "settings")' @onclick='() => SelectTab("settings")'>Условия</button>
@@ -24,12 +24,20 @@
     @if (_tab == "log")
     {
         <div class="console-toolbar">
-            <label class="console-search"><span class="sr-only">Найти в журнале</span><input placeholder="Найти в журнале…" @bind="_search" @bind:event="oninput" /></label>
+            <div class="view-switch" aria-label="Представление журнала"><button class="@(_structured ? "selected" : "")" aria-pressed="@_structured" @onclick="() => SetView(true)">◫ Разбор</button><button class="@(!_structured ? "selected" : "")" aria-pressed="@(!_structured)" @onclick="() => SetView(false)">≡ Исходный журнал</button></div>
+            <label class="console-search"><span class="sr-only">@(_structured ? "Поиск по диалогу этапа" : "Найти в журнале")</span><input placeholder="@(_structured ? "Поиск по диалогу этапа…" : "Найти в журнале…")" @bind="_search" @bind:event="oninput" /></label>
             <div class="console-text-size"><button class="screen-button" aria-label="Уменьшить текст" disabled="@(_fontSize <= 13)" @onclick="() => _fontSize--">A−</button><span>@_fontSize</span><button class="screen-button" aria-label="Увеличить текст" disabled="@(_fontSize >= 24)" @onclick="() => _fontSize++">A+</button></div>
-            <button class="screen-button" aria-pressed="@_readable" title="Показывать Unicode-последовательности как буквы. Скачиваемый файл сохраняет исходный текст." @onclick="() => _readable = !_readable">@(_readable ? "Читаемый текст ✓" : "Исходный текст")</button>
+            @if (!_structured) { <button class="screen-button" aria-pressed="@_readable" title="Показывать Unicode-последовательности как буквы. Скачиваемый файл сохраняет исходный текст." @onclick="() => _readable = !_readable">@(_readable ? "Читаемый текст ✓" : "Исходный текст")</button> }
             <label class="console-follow"><input type="checkbox" @bind="_follow" @bind:after="FollowChanged" /><span class="follow-label">Следить за выводом</span><span class="follow-short">Авто</span></label>
             <a class="screen-button" href="@($"/logs/{Run.Id}")">Скачать журнал ↓</a>
         </div>
+        @if (_structured)
+        {
+            @if (Data.Calls.Count == 0 && !string.IsNullOrWhiteSpace(Log)) { <div class="evidence-notice">Структурированные запросы ещё не записаны или отсутствуют в этом архиве. <button class="text-button" @onclick="() => SetView(false)">Открыть полный исходный журнал →</button></div> }
+            <ExperimentWorkbench @key="Run.Id" Data="Data" Search="@_search" Follow="_follow" Active="Active" />
+        }
+        else
+        {
         <div class="console-key"><span class="key-stage">Этап</span><span class="key-question">Вопрос</span><span class="key-answer">Ответ</span><span class="key-success">Проверка пройдена</span><span class="key-error">Ошибка</span><span>Цвет дополняет исходный текст</span></div>
         <div class="console-viewport" @ref="_viewport" tabindex="0" aria-label="Полный журнал выполнения" aria-live="off">
             @if (_lines.Count == 0) { <div class="console-empty"><span>◌</span><h3>@(Active ? "Эксперимент готовится" : "Журнал пока пуст")</h3><p>Здесь появятся этапы, запросы, ответы и результаты проверок.</p></div> }
@@ -43,6 +51,7 @@
             }
         </div>
         <footer class="console-footer"><span>@(string.IsNullOrWhiteSpace(_search) ? $"Весь журнал · {_lines.Count} строк" : $"Найдено {VisibleLines.Count()} из {_lines.Count} строк")</span><span>@(_follow ? "Автопрокрутка включена" : "Позиция чтения сохранена") · @(_recording ? "Esc — выйти из режима записи" : "Размер текста и режим записи — только для просмотра")</span></footer>
+        }
     }
     else
     {
@@ -56,6 +65,7 @@
 
 @code {
     [Parameter, EditorRequired] public BenchmarkRun Run { get; set; } = null!;
+    [Parameter] public ExperimentViewData Data { get; set; } = new();
     [Parameter] public string Log { get; set; } = "";
     [Parameter] public string Duration { get; set; } = "—";
     [Parameter] public int ArtifactCount { get; set; }
@@ -69,7 +79,7 @@
     private sealed record Line(int Number, string Text, string ReadableText, string Kind);
     private List<Line> _lines = [];
     private string _source = "", _search = "", _tab = "log", _runId = "";
-    private bool _recording, _follow = true, _scrollPending, _readable = true;
+    private bool _recording, _follow = true, _scrollPending, _readable = true, _structured = true;
     private int _fontSize = 16;
     private ElementReference _viewport, _screen;
     private IJSObjectReference? _module;
@@ -80,7 +90,7 @@
     private string TabClass(string name) => _tab == name ? "is-selected" : "";
     protected override void OnParametersSet()
     {
-        if (_runId != Run.Id) { _runId = Run.Id; _tab = "log"; _search = ""; _source = ""; _lines.Clear(); }
+        if (_runId != Run.Id) { _runId = Run.Id; _tab = "log"; _search = ""; _source = ""; _lines.Clear(); _follow = Active; _structured = true; }
         if (_source == Log) return;
         _source = Log;
         _lines = Log.Replace("\r\n", "\n").Split('\n').Select((text, index) => new Line(index + 1, text, Readable(text), Classify(text))).ToList();
@@ -102,12 +112,13 @@
         return "line-neutral";
     }
     private void SelectTab(string tab) { _tab = tab; if (tab == "log") _scrollPending = true; }
+    private void SetView(bool structured) { _structured = structured; _scrollPending = true; }
     private void FollowChanged() => _scrollPending = _follow;
     private void ToggleRecording() { _recording = !_recording; _scrollPending = _follow; }
     [JSInvokable] public Task ExitRecording() { _recording = false; return InvokeAsync(StateHasChanged); }
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        bool scroll = _scrollPending && _follow && _tab == "log" && string.IsNullOrWhiteSpace(_search);
+        bool scroll = _scrollPending && _follow && _tab == "log" && !_structured && string.IsNullOrWhiteSpace(_search);
         if (!scroll && _syncedRecording == _recording) return;
         try
         {

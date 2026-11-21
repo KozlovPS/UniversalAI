@@ -1,0 +1,102 @@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="workbench">
+    <div class="stage-strip" aria-label="Этапы эксперимента">
+        <button class="stage-follow @(_step == null ? "selected" : "")" aria-pressed="@(_step == null)" @onclick="FollowStage">@(Active ? "● Текущий этап" : "↗ Последний этап")</button>
+        @foreach (var stage in Data.Steps)
+        {
+            <button class="stage-chip @(CurrentStep?.Id == stage.Id ? "selected" : "")" aria-pressed="@(CurrentStep?.Id == stage.Id)" @onclick="() => SelectStep(stage.Id)">
+                <span class="stage-index">@(Data.Steps.IndexOf(stage) + 1)</span><span><strong>@stage.Title</strong><small>@stage.Description</small></span>
+                <span class="stage-count">@Data.Calls.Count(c => c.Step == stage.Id && c.Response != null)</span>
+            </button>
+        }
+    </div>
+    <div class="workbench-summary">
+        <div><span class="workbench-eyebrow">@(Active && _step == null ? "СЕЙЧАС ВЫПОЛНЯЕТСЯ" : "ПРОСМОТР СОХРАНЁННОГО ЭТАПА")</span><h3>@(CurrentStep?.Title ?? "Подготовка эксперимента")</h3><p>@(CurrentStep?.Description ?? "Ожидаем первые записанные обращения к модели.")</p></div>
+        @if (Data.Layers is { } layers)
+        {
+            <div class="probe-progress"><strong>@layers.Observations.Count<span> / 24</span></strong><small>проверок выполнено · @layers.Observations.Count(o => o.Passed) пройдено</small><progress value="@layers.Observations.Count" max="24" aria-label="Выполненные проверки"></progress></div>
+        }
+        else { <div class="probe-progress"><strong>@StepCalls.Count(c => c.Response != null)<span> ответов</span></strong><small>@StepCalls.Count(c => c.Kind == "memory") обращений к памяти</small></div> }
+    </div>
+    @foreach (var notice in Data.Notices.Distinct()) { <p class="evidence-notice" role="status">@notice</p> }
+    <div class="workbench-columns @(_mobileInspector ? "show-inspector" : "")">
+        <section class="dialogue-pane" aria-label="Диалог эксперимента">
+            <header class="pane-heading"><div><span class="pane-icon">◌</span><strong>Диалог</strong><span class="pane-counter">@StepCalls.Count(c => c.Kind != "memory")</span></div><button class="screen-button mobile-inspect" @onclick="() => _mobileInspector = true">Контекст и события →</button><span class="pane-caption">Вопрос → ответ → проверка</span></header>
+            <div class="conversation-stream" @ref="_stream" tabindex="0" aria-label="Вопросы и ответы этапа">
+                @if (!VisibleCalls.Any())
+                {
+                    <div class="workbench-empty"><span>◌</span><h3>@(string.IsNullOrWhiteSpace(Search) ? "Диалог появится здесь" : "Совпадений нет")</h3><p>@(StepCalls.Any(c => c.Kind == "memory") ? "На этом этапе модель обрабатывает память. События показаны в инспекторе." : "Каждый запрос и ответ будут показаны отдельной карточкой.")</p></div>
+                }
+                @foreach (var call in VisibleCalls)
+                {
+                    <article class="exchange @(SelectedCall?.Number == call.Number ? "is-inspected" : "")" @key="call.Number">
+                        <div class="exchange-heading"><span>ЗАПРОС @call.Number.ToString("D2")</span><span>@call.Request.Model</span><button class="inspect-call" aria-label="@($"Контекст запроса {call.Number}")" aria-pressed="@(SelectedCall?.Number == call.Number)" @onclick="() => Inspect(call.Number)">Контекст ↗</button></div>
+                        <div class="speech speech-user"><span class="speaker-avatar">В</span><div><span class="speaker-label">Вопрос / вход</span><div class="speech-text">@Display(Question(call))</div></div></div>
+                        <div class="speech speech-assistant"><span class="speaker-avatar">AI</span><div><span class="speaker-label">Модель</span><div class="speech-text">@Display(call.Response?.Content ?? call.Error ?? (Active ? "Ожидание ответа…" : "Ответ не сохранён · прогон остановлен или прерван"))</div></div></div>
+                        @if (call.Expected != null)
+                        { <div class="expectation"><span>Ожидалось</span><strong>@Display(call.Expected)</strong></div> }
+                        <footer class="exchange-footer"><span class="result-pill @(call.Error != null || call.Passed == false ? "result-failed" : call.Passed == true ? "result-passed" : "")">@(call.Error != null ? "Ошибка API" : call.Passed == true ? "✓ Проверка пройдена" : call.Passed == false ? "! Проверка не пройдена" : call.Response != null ? "Ответ получен" : Active ? "Выполняется" : "Нет ответа")</span><span>@Usage(call)@Seconds(call)</span></footer>
+                    </article>
+                }
+            </div>
+        </section>
+        <aside class="inspector-pane" aria-label="Технический разбор">
+            <header class="pane-heading"><div><span class="pane-icon">⌘</span><strong>Контекст и события</strong></div><button class="screen-button mobile-inspect" @onclick="() => _mobileInspector = false">← Диалог</button><span class="pane-caption">Инспектор</span></header>
+            <div class="inspector-scroll" tabindex="0">
+                <ExperimentContext Data="Data" Step="CurrentStep" Call="SelectedCall" />
+                <section class="inspector-section"><div class="inspector-section-title"><span>СОБЫТИЯ ЭТАПА</span><span>@StepCalls.Count</span></div>
+                    @if (StepCalls.Count == 0) { <p class="inspector-note">Записанные события появятся после начала выполнения.</p> }
+                    @foreach (var call in StepCalls)
+                    {
+                        <button class="event-row @(SelectedCall?.Number == call.Number ? "selected" : "")" @onclick="() => Inspect(call.Number, false)"><span class="event-symbol @(call.Kind == "memory" ? "memory-event" : "")">@(call.Error != null ? "!" : call.Kind == "memory" ? "⌘" : "↗")</span><span><strong>@(call.Kind == "memory" ? "Обновление памяти" : "Запрос модели") <small>#@call.Number</small></strong><small>@(call.Error != null ? "Ошибка · подробности в запросе" : call.Response != null ? "Ответ сохранён" : Active ? "Выполняется" : "Ответ не сохранён")@Seconds(call)</small></span></button>
+                    }
+                </section>
+            </div>
+        </aside>
+    </div>
+    <footer class="console-footer"><span>Источник: сохранённые запросы и ответы API</span><span>Выберите запрос, чтобы разобрать его контекст</span></footer>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ExperimentViewData Data { get; set; } = new();
+    [Parameter] public string Search { get; set; } = "";
+    [Parameter] public bool Follow { get; set; }
+    [Parameter] public bool Active { get; set; }
+    private string? _step;
+    private int? _call;
+    private bool _mobileInspector, _scrollPending = true;
+    private bool _initialized, _wasFollowing;
+    private int _lastCount;
+    private ElementReference _stream;
+    private IJSObjectReference? _module;
+    private ExperimentViewData.Step? CurrentStep => Data.Steps.FirstOrDefault(s => s.Id == _step) ?? Data.Steps.LastOrDefault();
+    private List<ExperimentViewData.Call> StepCalls => Data.Calls.Where(c => c.Step == CurrentStep?.Id).ToList();
+    private ExperimentViewData.Call? SelectedCall => StepCalls.FirstOrDefault(c => c.Number == _call) ??
+        (_step == null && Active ? StepCalls.LastOrDefault(c => c.Kind != "memory") ?? StepCalls.LastOrDefault() : StepCalls.FirstOrDefault(c => c.Kind != "memory") ?? StepCalls.FirstOrDefault());
+    private IEnumerable<ExperimentViewData.Call> VisibleCalls => StepCalls.Where(c => c.Kind != "memory" && (string.IsNullOrWhiteSpace(Search) || Question(c).Contains(Search, StringComparison.OrdinalIgnoreCase) || (c.Response?.Content.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false) || (c.Expected?.Contains(Search, StringComparison.OrdinalIgnoreCase) ?? false)));
+    private static string Question(ExperimentViewData.Call call) => call.Request.Messages.LastOrDefault(m => m.Role == "user")?.Content ?? call.Request.Messages.LastOrDefault()?.Content ?? "Пустой вход";
+    private static string Display(string text) => text;
+    private static string Usage(ExperimentViewData.Call call) => call.Response is { } r && (r.PromptTokens > 0 || r.CompletionTokens > 0) ? $"{r.PromptTokens} вх. / {r.CompletionTokens} вых. токенов" : "usage Н/д";
+    private static string Seconds(ExperimentViewData.Call call) => call.Seconds is { } seconds ? $" · {seconds:F1} с" : "";
+    protected override void OnParametersSet()
+    {
+        if (!_initialized && Data.Steps.Count > 0) { if (!Active) _step = Data.Steps[0].Id; _initialized = true; }
+        if (Follow && !_wasFollowing) _scrollPending = true;
+        _wasFollowing = Follow;
+        if (_lastCount != Data.Calls.Count) { _lastCount = Data.Calls.Count; _scrollPending = true; }
+    }
+    private void SelectStep(string id) { _step = id; _call = null; _scrollPending = true; }
+    private void FollowStage() { _step = null; _call = null; _scrollPending = true; }
+    private void Inspect(int number, bool mobile = true) { _call = number; if (mobile) _mobileInspector = true; }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrollPending || !Follow || !string.IsNullOrWhiteSpace(Search)) return;
+        _scrollPending = false;
+        try { _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./experiment-screen.js"); await _module.InvokeVoidAsync("followOutput", _stream); }
+        catch (JSDisconnectedException) { }
+    }
+    public async ValueTask DisposeAsync() { if (_module != null) try { await _module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+}

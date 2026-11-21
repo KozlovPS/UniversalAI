@@ -9,6 +9,7 @@ namespace UniversalAI.Benchmarks;
 
 public static class Day11MemoryLayersBenchmark
 {
+    public const string ScenarioVersion = "2";
     private static readonly JsonSerializerOptions HumanJson = new()
     { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
     public const string Instructions = """
@@ -95,7 +96,7 @@ public static class Day11MemoryLayersBenchmark
                     Log($"ОЖИДАНИЕ: {expected} ({(available ? "слой доступен" : "слой очищен")})");
                     var request = new ChatRequest
                     {
-                        Model = settings.Model!, MaxTokens = 160,
+                        Model = settings.Model!,
                         Temperature = capabilities.SupportsTemperature ? 0 : null,
                         Messages = [new() { Role = "system", Content = Instructions }, .. layers.Messages,
                             new() { Role = "user", Content = probe.Question }]
@@ -131,7 +132,7 @@ public static class Day11MemoryLayersBenchmark
             var options = new JsonSerializerOptions { WriteIndented = true,
                 Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
             await File.WriteAllTextAsync(Path.Combine(context.Directory, "report.json"),
-                JsonSerializer.Serialize(new Report(completed, error, settings.Model, "1", "1", observations, snapshots), options), CancellationToken.None);
+                JsonSerializer.Serialize(new Report(completed, error, settings.Model, ScenarioVersion, "1", observations, snapshots), options), CancellationToken.None);
             var report = new StringBuilder("# День 11 — слои памяти\n\n")
                 .AppendLine($"Завершён: {completed}. Модель: {settings.Model}. Проверок: {observations.Count}/24. Ошибка: {error ?? "нет"}.")
                 .AppendLine("\nОчистка накопительная: диалог → задача → facts. Каждый вопрос независим; ответы не дописываются в историю.")
