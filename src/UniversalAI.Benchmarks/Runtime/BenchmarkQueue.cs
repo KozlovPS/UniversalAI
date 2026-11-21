@@ -52,6 +52,18 @@ public sealed class BenchmarkQueue(BenchmarkRunner runner, FileRunStore store, I
         await base.StartAsync(cancellationToken);
     }
 
+    public async Task DeleteAsync(string id, CancellationToken ct = default)
+    {
+        await _submission.WaitAsync(ct);
+        try
+        {
+            if (_cancellations.ContainsKey(id))
+                throw new InvalidOperationException("Прогон ещё завершает работу. Дождитесь его остановки.");
+            await store.DeleteAsync(id, ct);
+        }
+        finally { _submission.Release(); }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await foreach (var id in _queue.Reader.ReadAllAsync(stoppingToken))
@@ -71,6 +83,7 @@ public sealed class BenchmarkQueue(BenchmarkRunner runner, FileRunStore store, I
                 await runner.ExecuteAsync(run, ct: cancellation.Token);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
+            catch (KeyNotFoundException) { /* A cancelled queued item may have been deleted from history. */ }
             catch (Exception e) { logger.LogError(e, "Benchmark {RunId} failed", id); }
             finally { _cancellations.TryRemove(id, out _); }
         }

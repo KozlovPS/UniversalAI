@@ -8,7 +8,7 @@ public sealed record ConversationInfo(int Id, string Title, string Model, string
     int Keep, int Batch, double Temperature, int MaxTokens, string SystemPrompt,
     DateTime UpdatedAt, string FactsJson, string? Summary, double? TopP = null,
     double? FrequencyPenalty = null, double? PresencePenalty = null, int? Seed = null,
-    string? ReasoningEffort = null, int? ReasoningBudgetTokens = null);
+    string? ReasoningEffort = null, int? ReasoningBudgetTokens = null, string WorkingMemoryJson = "{}");
 public sealed record CreateConversationRequest(string? Title = null, string? ProviderId = null,
     string? Model = null, string AgentId = "direct");
 public sealed record ConversationSettings(string? Model = null, string? AgentId = null,
@@ -17,7 +17,8 @@ public sealed record ConversationSettings(string? Model = null, string? AgentId 
     string? SystemPrompt = null, string? Title = null, double? TopP = null,
     double? FrequencyPenalty = null, double? PresencePenalty = null, int? Seed = null,
     string? ReasoningEffort = null, int? ReasoningBudgetTokens = null,
-    bool ClearReasoning = false, bool ResetGeneration = false);
+    bool ClearReasoning = false, bool ResetGeneration = false,
+    string? WorkingMemoryJson = null, string? LongTermMemoryJson = null, bool ClearShortTerm = false);
 public sealed record SendMessageRequest(string Content);
 public sealed record MessagePage(IReadOnlyList<ChatMessage> Items, int Total, int Offset);
 public sealed record AgentInfo(string Id, string Name, string Description);

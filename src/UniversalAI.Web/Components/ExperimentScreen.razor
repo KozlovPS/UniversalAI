@@ -1,0 +1,131 @@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<section class="experiment-screen @(_recording ? "is-recording" : "")" style="--console-font:@(_fontSize)px" @ref="_screen" aria-label="Демонстрационный экран эксперимента">
+    <header class="screen-heading">
+        <div class="screen-identity"><div class="screen-kicker"><span class="screen-signal @(Active ? "is-live" : "")"></span>@Run.BenchmarkId.ToUpperInvariant() <span>/</span> ЛАБОРАТОРИЯ ЭКСПЕРИМЕНТОВ</div><h2>@Run.Model</h2><p>@Run.Provider.Name <span>·</span> @Run.Id[..8] <span>·</span> @Run.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</p></div>
+        <div class="screen-status"><span class="badge @Run.Status.ToString().ToLowerInvariant()">@RunLabels.Status(Run.Status)</span>@Actions<button class="screen-button" @onclick="ToggleRecording" aria-pressed="@_recording" aria-label="@(_recording ? "Выйти из режима записи" : "Режим записи")"><span class="recording-label">@(_recording ? "Выйти из режима записи ↙" : "Режим записи ↗")</span><span class="recording-short">@(_recording ? "Закрыть ↙" : "Экран ↗")</span></button></div>
+    </header>
+    <div class="screen-metrics">
+        <div><span>ВЫЗОВЫ API</span><strong>@Run.CompletedCalls</strong></div>
+        <div><span>ВРЕМЯ</span><strong>@Duration</strong></div>
+        <div><span>ФАЙЛЫ</span><strong>@ArtifactCount</strong></div>
+        <div class="screen-update"><span>@(RefreshError == null ? Active ? "ОБНОВЛЕНИЕ КАЖДЫЕ 2 СЕК" : "ДАННЫЕ ОБНОВЛЕНЫ" : "ОБНОВЛЕНИЕ НЕДОСТУПНО")</span><strong>@(UpdatedAt?.ToLocalTime().ToString("HH:mm:ss") ?? "—")</strong></div>
+    </div>
+    @if (Run.Error != null) { <div class="screen-notice" role="status">@Run.Error</div> }
+    @if (RefreshError != null) { <div class="screen-notice" role="alert">@RefreshError · Показаны последние полученные данные.</div> }
+    <nav class="screen-tabs" aria-label="Информация эксперимента">
+        <button class="@TabClass("log")" aria-pressed='@(_tab == "log")' @onclick='() => SelectTab("log")'>Журнал <span>@_lines.Count</span></button>
+        @if (Memory != null && ShowMemory) { <button class="@TabClass("memory")" aria-pressed='@(_tab == "memory")' @onclick='() => SelectTab("memory")'>Память и этапы</button> }
+        <button class="@TabClass("results")" aria-pressed='@(_tab == "results")' @onclick='() => SelectTab("results")'>Результаты <span>@ArtifactCount</span></button>
+        <button class="@TabClass("settings")" aria-pressed='@(_tab == "settings")' @onclick='() => SelectTab("settings")'>Условия</button>
+    </nav>
+    @if (_tab == "log")
+    {
+        <div class="console-toolbar">
+            <label class="console-search"><span class="sr-only">Найти в журнале</span><input placeholder="Найти в журнале…" @bind="_search" @bind:event="oninput" /></label>
+            <div class="console-text-size"><button class="screen-button" aria-label="Уменьшить текст" disabled="@(_fontSize <= 13)" @onclick="() => _fontSize--">A−</button><span>@_fontSize</span><button class="screen-button" aria-label="Увеличить текст" disabled="@(_fontSize >= 24)" @onclick="() => _fontSize++">A+</button></div>
+            <button class="screen-button" aria-pressed="@_readable" title="Показывать Unicode-последовательности как буквы. Скачиваемый файл сохраняет исходный текст." @onclick="() => _readable = !_readable">@(_readable ? "Читаемый текст ✓" : "Исходный текст")</button>
+            <label class="console-follow"><input type="checkbox" @bind="_follow" @bind:after="FollowChanged" /><span class="follow-label">Следить за выводом</span><span class="follow-short">Авто</span></label>
+            <a class="screen-button" href="@($"/logs/{Run.Id}")">Скачать журнал ↓</a>
+        </div>
+        <div class="console-key"><span class="key-stage">Этап</span><span class="key-question">Вопрос</span><span class="key-answer">Ответ</span><span class="key-success">Проверка пройдена</span><span class="key-error">Ошибка</span><span>Цвет дополняет исходный текст</span></div>
+        <div class="console-viewport" @ref="_viewport" tabindex="0" aria-label="Полный журнал выполнения" aria-live="off">
+            @if (_lines.Count == 0) { <div class="console-empty"><span>◌</span><h3>@(Active ? "Эксперимент готовится" : "Журнал пока пуст")</h3><p>Здесь появятся этапы, запросы, ответы и результаты проверок.</p></div> }
+            else
+            {
+                @foreach (var line in VisibleLines)
+                {
+                    <div class="console-line @line.Kind" @key="line.Number"><span class="console-line-number" aria-hidden="true">@line.Number.ToString("D3")</span><span class="console-line-text">@(_readable ? line.ReadableText : line.Text)</span></div>
+                }
+                @if (!string.IsNullOrWhiteSpace(_search) && !VisibleLines.Any()) { <p class="console-no-results">Совпадений нет. Измените поисковый запрос.</p> }
+            }
+        </div>
+        <footer class="console-footer"><span>@(string.IsNullOrWhiteSpace(_search) ? $"Весь журнал · {_lines.Count} строк" : $"Найдено {VisibleLines.Count()} из {_lines.Count} строк")</span><span>@(_follow ? "Автопрокрутка включена" : "Позиция чтения сохранена") · @(_recording ? "Esc — выйти из режима записи" : "Размер текста и режим записи — только для просмотра")</span></footer>
+    }
+    else
+    {
+        <div class="screen-detail-viewport" tabindex="0">
+            @if (_tab == "memory") { @Memory }
+            @if (_tab == "results") { @Results }
+            @if (_tab == "settings") { @Settings }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public BenchmarkRun Run { get; set; } = null!;
+    [Parameter] public string Log { get; set; } = "";
+    [Parameter] public string Duration { get; set; } = "—";
+    [Parameter] public int ArtifactCount { get; set; }
+    [Parameter] public DateTimeOffset? UpdatedAt { get; set; }
+    [Parameter] public string? RefreshError { get; set; }
+    [Parameter] public RenderFragment? Memory { get; set; }
+    [Parameter] public bool ShowMemory { get; set; }
+    [Parameter] public RenderFragment? Results { get; set; }
+    [Parameter] public RenderFragment? Settings { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+    private sealed record Line(int Number, string Text, string ReadableText, string Kind);
+    private List<Line> _lines = [];
+    private string _source = "", _search = "", _tab = "log", _runId = "";
+    private bool _recording, _follow = true, _scrollPending, _readable = true;
+    private int _fontSize = 16;
+    private ElementReference _viewport, _screen;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<ExperimentScreen>? _reference;
+    private bool _syncedRecording;
+    private bool Active => Run.Status is RunStatus.Running or RunStatus.Queued;
+    private IEnumerable<Line> VisibleLines => string.IsNullOrWhiteSpace(_search) ? _lines : _lines.Where(l => l.Text.Contains(_search, StringComparison.OrdinalIgnoreCase) || l.ReadableText.Contains(_search, StringComparison.OrdinalIgnoreCase));
+    private string TabClass(string name) => _tab == name ? "is-selected" : "";
+    protected override void OnParametersSet()
+    {
+        if (_runId != Run.Id) { _runId = Run.Id; _tab = "log"; _search = ""; _source = ""; _lines.Clear(); }
+        if (_source == Log) return;
+        _source = Log;
+        _lines = Log.Replace("\r\n", "\n").Split('\n').Select((text, index) => new Line(index + 1, text, Readable(text), Classify(text))).ToList();
+        _scrollPending = true;
+    }
+    private static string Readable(string text) => System.Text.RegularExpressions.Regex.Replace(text,
+        @"(?<!\\)\\u([0-9a-fA-F]{4})", match => ((char)Convert.ToInt32(match.Groups[1].Value, 16)).ToString());
+    private static string Classify(string text)
+    {
+        var value = text.Trim();
+        if (value.Length == 0) return "line-space";
+        if (value.StartsWith("ОЖИДАНИЕ:", StringComparison.Ordinal)) return "line-expected";
+        if (value.StartsWith("ВОПРОС:", StringComparison.Ordinal)) return "line-question";
+        if (value.StartsWith("ОТВЕТ:", StringComparison.Ordinal)) return "line-answer";
+        if (value.Contains("ОШИБКА", StringComparison.Ordinal) || value.StartsWith("FAIL", StringComparison.OrdinalIgnoreCase) || value.StartsWith("Error", StringComparison.OrdinalIgnoreCase) || value.StartsWith("Ошибка", StringComparison.Ordinal)) return "line-error";
+        if (value.StartsWith("OK:", StringComparison.Ordinal) || value.StartsWith("ОЦЕНКА: ПРОЙДЕНО", StringComparison.Ordinal)) return "line-success";
+        if (value.StartsWith("===", StringComparison.Ordinal) || value.StartsWith("══", StringComparison.Ordinal) || value.StartsWith("ЗАВЕРШЕНО", StringComparison.Ordinal) || value.StartsWith("Итог", StringComparison.Ordinal) || value.StartsWith("ДЕНЬ ", StringComparison.Ordinal)) return "line-stage";
+        if (value.StartsWith("API #", StringComparison.Ordinal) || value.StartsWith("[", StringComparison.Ordinal) || value.StartsWith("usage:", StringComparison.Ordinal)) return "line-call";
+        return "line-neutral";
+    }
+    private void SelectTab(string tab) { _tab = tab; if (tab == "log") _scrollPending = true; }
+    private void FollowChanged() => _scrollPending = _follow;
+    private void ToggleRecording() { _recording = !_recording; _scrollPending = _follow; }
+    [JSInvokable] public Task ExitRecording() { _recording = false; return InvokeAsync(StateHasChanged); }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        bool scroll = _scrollPending && _follow && _tab == "log" && string.IsNullOrWhiteSpace(_search);
+        if (!scroll && _syncedRecording == _recording) return;
+        try
+        {
+            _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./experiment-screen.js");
+            if (_syncedRecording != _recording)
+            {
+                _reference ??= DotNetObjectReference.Create(this);
+                await _module.InvokeVoidAsync("setRecording", _screen, _recording, _reference);
+                _syncedRecording = _recording;
+            }
+            if (scroll) { _scrollPending = false; await _module.InvokeVoidAsync("followOutput", _viewport); }
+        }
+        catch (JSDisconnectedException) { }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (_module != null)
+            try { await _module.InvokeVoidAsync("setRecording", _screen, false, _reference); await _module.DisposeAsync(); } catch (JSDisconnectedException) { }
+        _reference?.Dispose();
+    }
+}

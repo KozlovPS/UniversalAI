@@ -60,7 +60,21 @@ public sealed class WorkspaceCommandHandler(IWorkspaceClient workspace) : IConso
                     update = new(AgentId: value); break;
                 case "/memory":
                     if (value.Length == 0) { Console.WriteLine((await workspace.GetAsync(id, cancellationToken)).MemoryStrategy); return true; }
-                    update = new(MemoryStrategy: value.ToLowerInvariant() switch { "summary" => "Summary", "slidingwindow" or "window" => "SlidingWindow", "stickyfacts" or "facts" => "StickyFacts", _ => throw new ArgumentException("/memory Summary|SlidingWindow|StickyFacts") }); break;
+                    update = new(MemoryStrategy: value.ToLowerInvariant() switch { "summary" => "Summary", "slidingwindow" or "window" => "SlidingWindow", "stickyfacts" or "facts" => "StickyFacts", "layered" => "Layered", _ => throw new ArgumentException("/memory Summary|SlidingWindow|StickyFacts|Layered") }); break;
+                case "/working": update = new(WorkingMemoryJson: value); break;
+                case "/longterm": update = new(LongTermMemoryJson: value); break;
+                case "/forget-layer":
+                    update = value.ToLowerInvariant() switch
+                    {
+                        "short" => new(ClearShortTerm: true),
+                        "working" => new(WorkingMemoryJson: "{}"),
+                        "long" => new(LongTermMemoryJson: "{}"),
+                        _ => throw new ArgumentException("/forget-layer short|working|long")
+                    }; break;
+                case "/layers":
+                    var layers = await workspace.GetAsync(id, cancellationToken);
+                    Console.WriteLine($"Диалог: последние {layers.Keep} сообщений; рабочая: {layers.WorkingMemoryJson}; долговременная: {layers.FactsJson}");
+                    return true;
                 case "/compression":
                     if (value == "now") { await workspace.CompressAsync(id, cancellationToken); Console.WriteLine("Summary обновлено."); return true; }
                     if (value.Length == 0) { var c = await workspace.GetAsync(id, cancellationToken); Console.WriteLine($"{c.MemoryStrategy}: {c.CompressionEnabled}; keep={c.Keep}, batch={c.Batch}"); return true; }

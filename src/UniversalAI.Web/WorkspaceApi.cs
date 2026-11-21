@@ -35,25 +35,33 @@ public static class WorkspaceApi
             return Results.Accepted($"/api/runs/{run.Id}", run);
         });
         api.MapGet("/runs/{id}", (string id, FileRunStore store, CancellationToken ct) => store.GetAsync(id, ct));
+        api.MapDelete("/runs/{id}", async (string id, BenchmarkQueue queue, CancellationToken ct) =>
+        { await queue.DeleteAsync(id, ct); return Results.NoContent(); });
         api.MapPost("/runs/{id}/cancel", async (string id, BenchmarkQueue queue, CancellationToken ct) => { await queue.CancelAsync(id, ct); return Results.Ok(new { requested = true }); });
         api.MapGet("/runs/{id}/artifacts", (string id, FileRunStore store, CancellationToken ct) => store.ArtifactsAsync(id, ct));
         api.MapGet("/runs/{id}/metrics", (string id, RunMetricsReader metrics, CancellationToken ct) => metrics.ReadAsync(id, ct));
         api.MapGet("/runs/{id}/artifacts/{name}", async (string id, string name, FileRunStore store, CancellationToken ct) =>
             Results.File(await store.ArtifactPathAsync(id, name, ct), "application/octet-stream", name));
-        api.MapGet("/runs/{id}/log", async (string id, FileRunStore store, CancellationToken ct) =>
+        api.MapGet("/runs/{id}/log", async (string id, bool? full, FileRunStore store, CancellationToken ct) =>
         {
             _ = await store.GetAsync(id, ct);
-            return Results.Text(await ReadLogTailAsync(Path.Combine(store.GetDirectory(id), "output.log"), ct), "text/plain");
+            return Results.Text(await ReadLogTailAsync(Path.Combine(store.GetDirectory(id), "output.log"), ct, full ?? false), "text/plain");
         });
+        app.MapGet("/logs/{id}", async (string id, FileRunStore store, CancellationToken ct) =>
+        {
+            _ = await store.GetAsync(id, ct);
+            string path = Path.Combine(store.GetDirectory(id), "output.log");
+            return File.Exists(path) ? Results.File(path, "text/plain; charset=utf-8", $"{id}-output.log") : Results.NotFound();
+        }).RequireAuthorization();
         app.MapGet("/downloads/{id}/{name}", async (string id, string name, FileRunStore store, CancellationToken ct) =>
             Results.File(await store.ArtifactPathAsync(id, name, ct), "application/octet-stream", name)).RequireAuthorization();
     }
 
-    public static async Task<string> ReadLogTailAsync(string path, CancellationToken ct = default)
+    public static async Task<string> ReadLogTailAsync(string path, CancellationToken ct = default, bool full = false)
     {
         if (!File.Exists(path)) return "";
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        if (stream.Length > 65536) stream.Seek(-65536, SeekOrigin.End);
+        if (!full && stream.Length > 65536) stream.Seek(-65536, SeekOrigin.End);
         using var reader = new StreamReader(stream);
         return await reader.ReadToEndAsync(ct);
     }

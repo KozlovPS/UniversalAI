@@ -134,6 +134,7 @@ public static class BenchmarkRegistration
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day5", "Сравнение моделей", "Точность, скорость и стоимость трёх моделей", false), Day5ModelComparisonBenchmark.ExecuteAsync));
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day9", "Сжатие истории", "Полная история и накопительное summary", true), Day9CompressionBenchmark.ExecuteAsync));
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day10", "Стратегии памяти", "Окно, facts, summary и независимые ветки", true, HasMemory: true, HasBranches: true), Day10ContextBenchmark.ExecuteAsync));
+        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day11", "Слои памяти", "Диалог, задача и долговременные facts: состав промпта, токены и пошаговая очистка", true), Day11MemoryLayersBenchmark.ExecuteAsync));
         services.AddSingleton<BenchmarkRegistry>();
         services.AddSingleton<FileRunStore>();
         services.AddSingleton<BenchmarkRunner>();

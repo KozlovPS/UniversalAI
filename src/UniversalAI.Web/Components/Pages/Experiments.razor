@@ -31,7 +31,13 @@
     @if (_runs.Count > 1) { <div class="compare-bar"><span class="muted">Отметьте два прогона для сравнения</span><button class="secondary" disabled="@(_compare.Count != 2)" @onclick="Compare">Сравнить (@_compare.Count/2)</button></div> }
     @foreach (var run in _runs)
     {
-        <div class="run-row"><input type="checkbox" aria-label="@($"Сравнить {run.Id}")" checked="@_compare.Contains(run.Id)" @onchange="() => Toggle(run.Id)" /><a class="run-main" href="@($"/runs/{run.Id}")"><strong>@run.BenchmarkId.ToUpperInvariant() <span class="muted">· @run.Model</span></strong><small>@run.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm") · @run.CompletedCalls вызовов</small></a><span class="badge @run.Status.ToString().ToLowerInvariant()">@RunLabels.Status(run.Status)</span></div>
+        <div class="run-history-item" @key="run.Id">
+            <div class="run-row"><input type="checkbox" aria-label="@($"Сравнить {run.Id}")" checked="@_compare.Contains(run.Id)" @onchange="() => Toggle(run.Id)" /><a class="run-main" href="@($"/runs/{run.Id}")"><strong>@run.BenchmarkId.ToUpperInvariant() <span class="muted">· @run.Model</span></strong><small>@run.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm") · @run.CompletedCalls вызовов</small></a><span class="badge @run.Status.ToString().ToLowerInvariant()">@RunLabels.Status(run.Status)</span><button class="delete-run" disabled="@(run.Status is RunStatus.Running or RunStatus.Queued || _deleting)" title="@(run.Status is RunStatus.Running or RunStatus.Queued ? "Сначала остановите прогон" : "Удалить прогон и его файлы")" @onclick="() => _pendingDelete = run.Id">Удалить</button></div>
+            @if (_pendingDelete == run.Id)
+            {
+                <div class="delete-confirm" role="alert"><div><strong>Удалить этот прогон?</strong><p>Журнал и все результаты будут удалены безвозвратно. Другие прогоны останутся.</p></div><div class="actions"><button class="danger" disabled="@_deleting" @onclick="() => Delete(run.Id)">@(_deleting ? "Удаляем…" : "Удалить навсегда")</button><button class="secondary" disabled="@_deleting" @onclick="() => _pendingDelete = null">Оставить</button></div></div>
+            }
+        </div>
     }
 </section>
 </div>
@@ -40,6 +46,8 @@
     private int _keep = 6, _batch = 10;
     private bool _generate, _branches = true, _busy;
     private string? _error;
+    private string? _pendingDelete;
+    private bool _deleting;
     private IReadOnlyList<ProviderInfo> _providers = [];
     private IReadOnlyList<BenchmarkRun> _runs = [];
     private readonly HashSet<string> _compare = [];
@@ -61,5 +69,12 @@
         finally { _busy = false; }
     }
     private void Toggle(string id) { if (!_compare.Remove(id) && _compare.Count < 2) _compare.Add(id); }
+    private async Task Delete(string id)
+    {
+        _deleting = true; _error = null;
+        try { await Queue.DeleteAsync(id); _compare.Remove(id); _pendingDelete = null; await Refresh(); }
+        catch (Exception e) { _error = e.Message; }
+        finally { _deleting = false; }
+    }
     private void Compare() { var ids = _compare.ToArray(); Navigation.NavigateTo($"/compare/{ids[0]}/{ids[1]}"); }
 }

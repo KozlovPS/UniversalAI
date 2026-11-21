@@ -5,18 +5,19 @@
 @inject BenchmarkQueue Queue
 
 <PageTitle>Прогон — UniversalAI</PageTitle>
-<a class="back-link" href="/experiments">← Эксперименты</a>
-@if (_error != null) { <p class="alert" role="alert">@_error</p> }
+<div class="run-topbar"><a class="back-link" href="/experiments">← История прогонов</a><h1>Демонстрация эксперимента</h1></div>
+@if (_error != null && _run == null) { <p class="alert" role="alert">@_error</p> }
 @if (_run != null)
 {
-    <div class="page-heading"><div><div class="eyebrow">@_run.BenchmarkId.ToUpperInvariant() / @_run.Id[..8]</div><h1>@_run.Model</h1><p class="muted">@_run.Provider.Name · @_run.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</p></div>
-    <div class="actions"><span class="badge @_run.Status.ToString().ToLowerInvariant()">@RunLabels.Status(_run.Status)</span>@if (_run.Status is RunStatus.Running or RunStatus.Queued) { <button class="secondary" @onclick="Cancel">Отменить</button> }<button class="secondary" @onclick="Refresh">Обновить</button></div></div>
-    @if (_run.Error != null) { <p class="alert" role="status">@_run.Error</p> }
-    <div class="stats"><div class="stat"><span>ВЫЗОВЫ API</span><strong>@_run.CompletedCalls</strong><small>С учётом ответов и памяти</small></div><div class="stat"><span>ДЛИТЕЛЬНОСТЬ</span><strong>@Duration</strong><small>От начала выполнения</small></div><div class="stat"><span>АРТЕФАКТЫ</span><strong>@_artifacts.Count</strong><small>Включая частичные результаты</small></div></div>
-    <div class="two-columns"><section class="panel"><h2>Результаты</h2><div class="artifact-list">@foreach (var name in _artifacts) { <div><button class="text-button" @onclick="() => Preview(name)">@name</button><a href="@($"/downloads/{Id}/{Uri.EscapeDataString(name)}")" target="_blank">Скачать ↗</a></div> }</div>@if (_artifacts.Count == 0) { <p class="muted">Артефакты появятся по мере выполнения.</p> }</section>
-    <section class="panel"><h2>Условия эксперимента</h2><dl><dt>Подключение</dt><dd>@_run.Provider.BaseUrl</dd><dt>Стратегии и параметры</dt><dd>keep=@_run.Settings.Keep, batch=@_run.Settings.Batch, ветки=@_run.Settings.Branches</dd><dt>Снимок тарифов</dt><dd>@_run.PricingSnapshot</dd><dt>Версии</dt><dd>Сценарий @_run.ScenarioVersion / оценивание @_run.ScorerVersion</dd></dl></section></div>
-    @if (_preview != null) { <section class="panel"><h2>@_previewName</h2><pre class="report-preview">@_preview</pre></section> }
-    <section class="panel"><div class="section-heading"><h2>Журнал выполнения</h2><span class="muted">Обновляется каждые 2 секунды · последние 64 КБ</span></div><pre class="log">@(_log.Length == 0 ? "Ожидание выполнения…" : _log)</pre></section>
+    <ExperimentScreen Run="_run" Log="@_log" Duration="@Duration" ArtifactCount="_artifacts.Count" UpdatedAt="_updatedAt" RefreshError="@_error" ShowMemory='@(_run.BenchmarkId == "day11")'>
+        <Actions>@if (_run.Status is RunStatus.Running or RunStatus.Queued) { <button class="screen-button" @onclick="Cancel">Остановить</button> }<button class="screen-button screen-refresh" @onclick="Refresh">Обновить</button></Actions>
+        <Memory>@if (_run.BenchmarkId == "day11") { <Day11Progress Report="_day11" /> } else { <p>Дополнительный разбор доступен в журнале и сохранённых отчётах.</p> }</Memory>
+        <Results>
+            <section class="panel"><h2>Файлы и отчёты</h2><div class="artifact-list">@foreach (var name in _artifacts) { <div><button class="text-button" @onclick="() => Preview(name)">@name</button><a href="@($"/downloads/{Id}/{Uri.EscapeDataString(name)}")" target="_blank">Скачать ↗</a></div> }</div>@if (_artifacts.Count == 0) { <p class="muted">Файлы появятся по мере выполнения.</p> }</section>
+            @if (_preview != null) { <section class="panel"><h2>@_previewName</h2><pre class="report-preview">@_preview</pre></section> }
+        </Results>
+        <Settings><section class="panel"><h2>Условия эксперимента</h2><dl><dt>Подключение</dt><dd>@_run.Provider.BaseUrl</dd><dt>Модель</dt><dd>@_run.Model</dd><dt>Параметры</dt><dd>keep=@_run.Settings.Keep, batch=@_run.Settings.Batch, ветки=@_run.Settings.Branches</dd><dt>Снимок тарифов</dt><dd>@_run.PricingSnapshot</dd><dt>Версии</dt><dd>Сценарий @_run.ScenarioVersion / оценивание @_run.ScorerVersion</dd><dt>Начало / завершение</dt><dd>@(_run.StartedAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss") ?? "Ожидает запуска") / @(_run.FinishedAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss") ?? "Ещё не завершён")</dd><dt>Полный идентификатор</dt><dd>@_run.Id</dd></dl><details><summary>Все сохранённые параметры прогона</summary><pre class="report-preview">@JsonSerializer.Serialize(_run, FileRunStore.Json)</pre></details></section></Settings>
+    </ExperimentScreen>
 }
 @code {
     [Parameter] public string Id { get; set; } = "";
@@ -24,6 +25,8 @@
     private IReadOnlyList<string> _artifacts = [];
     private string _log = "", _previewName = "";
     private string? _preview, _error;
+    private DateTimeOffset? _updatedAt;
+    private UniversalAI.Benchmarks.Day11MemoryLayersBenchmark.Report? _day11;
     private readonly CancellationTokenSource _lifetime = new();
     private Task? _polling;
     private string Duration => _run?.StartedAt is { } start ? ((_run.FinishedAt ?? DateTimeOffset.UtcNow) - start).ToString(@"hh\:mm\:ss") : "—";
@@ -36,9 +39,28 @@
     }
     private async Task Refresh()
     {
-        try { _run = await Store.GetAsync(Id, _lifetime.Token); _artifacts = await Store.ArtifactsAsync(Id, _lifetime.Token); _log = await UniversalAI.Web.WorkspaceApi.ReadLogTailAsync(Path.Combine(Store.GetDirectory(Id), "output.log"), _lifetime.Token); StateHasChanged(); }
+        try
+        {
+            if (_run?.Id != Id) { _day11 = null; _preview = null; _previewName = ""; }
+            _run = await Store.GetAsync(Id, _lifetime.Token);
+            _artifacts = await Store.ArtifactsAsync(Id, _lifetime.Token);
+            _log = await UniversalAI.Web.WorkspaceApi.ReadLogTailAsync(Path.Combine(Store.GetDirectory(Id), "output.log"), _lifetime.Token, full: true);
+            if (_run.BenchmarkId == "day11" && _artifacts.Contains("report.json"))
+            {
+                try
+                {
+                    var json = await File.ReadAllTextAsync(await Store.ArtifactPathAsync(Id, "report.json"), _lifetime.Token);
+                    _day11 = JsonSerializer.Deserialize<UniversalAI.Benchmarks.Day11MemoryLayersBenchmark.Report>(json);
+                }
+                catch (System.Text.Json.JsonException) { /* Retry an in-progress report write on the next refresh. */ }
+                catch (IOException) { /* Writer may briefly own the report file. */ }
+            }
+            _updatedAt = DateTimeOffset.UtcNow;
+            _error = null;
+            StateHasChanged();
+        }
         catch (OperationCanceledException) { }
-        catch (Exception e) { _error = e.Message; }
+        catch (Exception e) { _error = e.Message; StateHasChanged(); }
     }
     private async Task Cancel() { try { await Queue.CancelAsync(Id); await Refresh(); } catch (Exception e) { _error = e.Message; } }
     private async Task Preview(string name)

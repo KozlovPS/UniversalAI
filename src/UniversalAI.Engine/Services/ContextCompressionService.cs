@@ -16,6 +16,7 @@ public sealed record PreparedContext(
     ChatResult? SummaryCall)
 {
     public Dictionary<string, string>? PendingFacts { get; init; }
+    public Context.MemoryLayerTokens? LayerTokens { get; init; }
 }
 
 /// <summary>Builds model context without deleting the original conversation log.</summary>
@@ -41,6 +42,16 @@ public sealed class ContextCompressionService(IContextMemoryStore conversations)
         if (!conversation.CompressionEnabled)
         {
             return new(history.ToList(), rawTokens, rawTokens, 0, history.Count, false, null);
+        }
+
+        if (conversation.MemoryStrategy == "Layered")
+        {
+            var layers = Context.LayeredMemory.Build(history,
+                Context.LayeredMemory.Parse(conversation.WorkingMemoryJson),
+                Context.LayeredMemory.Parse(conversation.FactsJson), conversation.ContextKeepLastMessages);
+            int recent = Context.SlidingWindowMemory.Select(history, conversation.ContextKeepLastMessages).Count;
+            return new(layers.Messages, rawTokens, layers.Tokens.Total, history.Count - recent, recent, false, null)
+            { LayerTokens = layers.Tokens };
         }
 
         if (conversation.MemoryStrategy is "SlidingWindow" or "StickyFacts")

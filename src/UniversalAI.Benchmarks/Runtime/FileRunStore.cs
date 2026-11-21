@@ -36,7 +36,10 @@ public sealed class FileRunStore(AppPaths paths)
     {
         string path = Path.Combine(GetDirectory(id), "run.json");
         if (!File.Exists(path)) throw new KeyNotFoundException("Запуск не найден.");
-        return JsonSerializer.Deserialize<BenchmarkRun>(await File.ReadAllTextAsync(path, ct), Json)
+        // Readers must allow atomic replacement of run.json while the runner records progress.
+        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.Asynchronous);
+        return await JsonSerializer.DeserializeAsync<BenchmarkRun>(stream, Json, ct)
             ?? throw new InvalidDataException("Пустые метаданные запуска.");
     }
     public async Task<IReadOnlyList<BenchmarkRun>> ListAsync(CancellationToken ct = default)
@@ -52,6 +55,24 @@ public sealed class FileRunStore(AppPaths paths)
             catch (Exception e) when (e is JsonException or IOException or KeyNotFoundException) { /* Ignore incomplete external imports. */ }
         }
         return runs.OrderByDescending(r => r.CreatedAt).ToList();
+    }
+    public async Task DeleteAsync(string id, CancellationToken ct = default)
+    {
+        await _writes.WaitAsync(ct);
+        try
+        {
+            var run = await GetAsync(id, ct);
+            if (run.Status is RunStatus.Running or RunStatus.Queued)
+                throw new InvalidOperationException("Сначала остановите прогон и дождитесь завершения.");
+            string directory = Path.GetFullPath(GetDirectory(id));
+            string root = Path.GetFullPath(paths.Runs).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (!directory.StartsWith(root, StringComparison.OrdinalIgnoreCase) ||
+                (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidOperationException("Небезопасный каталог прогона.");
+            ct.ThrowIfCancellationRequested();
+            Directory.Delete(directory, recursive: true);
+        }
+        finally { _writes.Release(); }
     }
     public async Task<IReadOnlyList<string>> ArtifactsAsync(string id, CancellationToken ct = default)
     {

@@ -13,11 +13,24 @@
 {
     <section class="panel stack">
         <div class="section-heading"><h2>@_current.Title</h2><div class="actions"><button class="secondary" disabled="@_busy" @onclick="Branch">Создать ветку</button><button class="secondary" disabled="@_busy" @onclick="RefreshCurrent">Обновить</button></div></div>
-        <div class="form-row"><label>Подключение<select @bind="_provider" disabled="@_busy" @bind:after="ProviderChanged">@foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }</select></label><label>Агент<select @bind="_agent" disabled="@_busy">@foreach (var a in _agents) { <option value="@a.Id">@a.Name</option> }</select></label><label>Память<select @bind="_memory" disabled="@_busy"><option>Summary</option><option>SlidingWindow</option><option>StickyFacts</option></select></label></div>
+        <div class="form-row"><label>Подключение<select @bind="_provider" disabled="@_busy" @bind:after="ProviderChanged">@foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }</select></label><label>Агент<select @bind="_agent" disabled="@_busy">@foreach (var a in _agents) { <option value="@a.Id">@a.Name</option> }</select></label><label>Память<select @bind="_memory" disabled="@_busy"><option>Summary</option><option>SlidingWindow</option><option>StickyFacts</option><option>Layered</option></select></label></div>
         <div class="form-row"><label>Модель<input @bind="_model" disabled="@_busy" /></label><label>Температура<input type="number" step="0.1" min="0" max="2" @bind="_temperature" disabled="@_busy" /></label><label>Лимит ответа<input type="number" min="1" @bind="_maxTokens" disabled="@_busy" /></label></div>
         <details><summary>Параметры контекста</summary><div class="form-row"><label>Последние сообщения<input type="number" min="2" @bind="_keep" /></label><label>Пакет summary<input type="number" min="1" @bind="_batch" /></label><label class="check"><input type="checkbox" @bind="_enabled" /> Память включена</label></div><label>Системный промпт<textarea rows="3" @bind="_prompt"></textarea></label></details>
         <div><button class="secondary" disabled="@_busy" @onclick="Save">Сохранить настройки</button></div>
     </section>
+    @if (_current.MemoryStrategy == "Layered")
+    {
+        <section class="panel stack">
+            <h2>Слои памяти</h2>
+            <p class="muted">В промпт входят последние @_current.Keep сообщений, все данные текущей задачи и долговременные facts. Каждый слой очищается отдельно. Кнопка сохранения заменяет выбранный словарь целиком. Обычная отправка сообщения их не меняет.</p>
+            @if (!_current.CompressionEnabled) { <p class="callout">Память выключена: модель получает полную историю без рабочей и долговременной памяти.</p> }
+            <div><button class="secondary" disabled="@_busy" @onclick='() => EditLayer("short", true)'>Очистить текущий диалог</button></div>
+            <label>Рабочая память: данные текущей задачи (JSON, строковые значения)<textarea rows="4" @bind="_workingJson" disabled="@_busy"></textarea></label>
+            <div class="actions"><button disabled="@_busy" @onclick='() => EditLayer("working", false)'>Сохранить рабочую память</button><button class="secondary" disabled="@_busy" @onclick='() => EditLayer("working", true)'>Очистить рабочую память</button></div>
+            <label>Долговременная память: профиль, решения, знания (facts Дня 10)<textarea rows="4" @bind="_longTermJson" disabled="@_busy"></textarea></label>
+            <div class="actions"><button disabled="@_busy" @onclick='() => EditLayer("long", false)'>Сохранить долговременную память</button><button class="secondary" disabled="@_busy" @onclick='() => EditLayer("long", true)'>Очистить долговременную память</button></div>
+        </section>
+    }
     <section class="panel messages" aria-live="polite">
         @if (_total > _messages.Count) { <button class="secondary" disabled="@_busy" @onclick="LoadEarlier">Показать предыдущие сообщения (@(_total - _messages.Count))</button> }
         @if (_messages.Count == 0) { <div class="empty"><span>◌</span><h3>Начните разговор</h3><p>Выберите подключение и модель, затем отправьте сообщение.</p></div> }
@@ -26,7 +39,7 @@
     </section>
     <section class="panel composer"><label class="sr-only" for="message">Сообщение</label><textarea id="message" @bind="_input" rows="3" placeholder="Введите сообщение…" disabled="@_busy"></textarea><div class="section-heading"><span class="muted">@_model</span>@if (_busy) { <button class="secondary" @onclick="Cancel">Отменить ожидание</button> } else { <button disabled="@string.IsNullOrWhiteSpace(_input)" @onclick="Send">Отправить ↑</button> }</div></section>
     <section class="panel"><details><summary>Память диалога</summary><h3>Summary</h3><pre>@(_current.Summary ?? "Пока не создано")</pre><h3>Sticky Facts</h3><pre>@_current.FactsJson</pre></details></section>
-    @if (_turn != null) { <section class="panel"><h2>Последний ход</h2><p>Токены API: @_turn.TokenUsage.PromptTokens вход / @_turn.TokenUsage.CompletionTokens выход. Циклы инструментов: @_turn.ToolRounds.</p>@if (_turn.Context != null) { <p class="muted">Оценка истории: @_turn.Context.RawHistoryTokens → @_turn.Context.EffectiveHistoryTokens токенов.</p> }<details><summary>Трасса и статистика</summary><pre>@JsonSerializer.Serialize(_turn, new JsonSerializerOptions { WriteIndented = true })</pre></details></section> }
+    @if (_turn != null) { <section class="panel"><h2>Последний ход</h2><p>Токены API: @_turn.TokenUsage.PromptTokens вход / @_turn.TokenUsage.CompletionTokens выход. Циклы инструментов: @_turn.ToolRounds.</p>@if (_turn.Context != null) { <p class="muted">Оценка истории: @_turn.Context.RawHistoryTokens → @_turn.Context.EffectiveHistoryTokens токенов.</p> }@if (_turn.Context?.LayerTokens is { } layers) { <p>Оценка добавленных токенов по слоям: диалог @layers.ShortTerm / задача @layers.Working / долговременная @layers.LongTerm. Это локальная оценка с обрамлением сообщений, не тарифицируемый usage API.</p> }<details><summary>Трасса и статистика</summary><pre>@JsonSerializer.Serialize(_turn, new JsonSerializerOptions { WriteIndented = true })</pre></details></section> }
 }
 </div></div>
 @code {
@@ -41,9 +54,28 @@
     private double _temperature = 0.7;
     private bool _enabled = true, _busy;
     private string? _error;
+    private string _workingJson = "{}", _longTermJson = "{}";
     private CancellationTokenSource? _request;
     protected override async Task OnInitializedAsync() { try { _providers = await Workspace.ProvidersAsync(); _agents = await Workspace.AgentsAsync(); _conversations = await Workspace.ListAsync(); if (_conversations.Count > 0) await Open(_conversations[0].Id); } catch (Exception e) { _error = e.Message; } }
-    private void Fill(ConversationInfo c) { _current = c; _provider = c.ProviderProfileId ?? _providers[0].Id; _model = c.Model; _agent = c.AgentId; _memory = c.MemoryStrategy; _keep = c.Keep; _batch = c.Batch; _enabled = c.CompressionEnabled; _temperature = c.Temperature; _maxTokens = c.MaxTokens; _prompt = c.SystemPrompt; }
+    private void Fill(ConversationInfo c) { _current = c; _provider = c.ProviderProfileId ?? _providers[0].Id; _model = c.Model; _agent = c.AgentId; _memory = c.MemoryStrategy; _keep = c.Keep; _batch = c.Batch; _enabled = c.CompressionEnabled; _temperature = c.Temperature; _maxTokens = c.MaxTokens; _prompt = c.SystemPrompt; _workingJson = c.WorkingMemoryJson; _longTermJson = c.FactsJson; }
+    private async Task EditLayer(string layer, bool clear)
+    {
+        if (_current == null || _busy) return;
+        _busy = true; _error = null;
+        try
+        {
+            var settings = layer switch
+            {
+                "short" => new ConversationSettings(ClearShortTerm: true),
+                "working" => new ConversationSettings(WorkingMemoryJson: clear ? "{}" : _workingJson),
+                _ => new ConversationSettings(LongTermMemoryJson: clear ? "{}" : _longTermJson)
+            };
+            await Workspace.UpdateAsync(_current.Id, settings);
+            await RefreshCurrent();
+        }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
     private async Task Open(int id)
     {
         try { Fill(await Workspace.GetAsync(id)); var first = await Workspace.MessagesAsync(id, limit: 1); _total = first.Total; var page = await Workspace.MessagesAsync(id, Math.Max(0, _total - 100)); _messages = page.Items.ToList(); _turn = null; }

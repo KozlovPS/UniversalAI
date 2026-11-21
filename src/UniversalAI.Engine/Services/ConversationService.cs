@@ -155,6 +155,16 @@ public class ConversationService : IContextMemoryStore
             .ToList();
     }
 
+    // Clear only the dialogue and derived summary. Explicit working/facts layers survive.
+    public async Task ClearShortTermAsync(int conversationId, CancellationToken ct = default)
+    {
+        var messages = await _db.ChatMessages.Where(m => m.ConversationId == conversationId).ToListAsync(ct);
+        _db.ChatMessages.RemoveRange(messages);
+        var summary = await GetSummaryAsync(conversationId, ct);
+        if (summary != null) _db.ContextSummaries.Remove(summary);
+        await _db.SaveChangesAsync(ct);
+    }
+
     // Очистка истории диалога
     public async Task ClearConversationAsync(
         int conversationId,
@@ -183,6 +193,7 @@ public class ConversationService : IContextMemoryStore
         }
 
         conversation.FactsJson = "{}";
+        conversation.WorkingMemoryJson = "{}";
         conversation.FactsPromptTokens = conversation.FactsCompletionTokens = 0;
         conversation.FactsUsageComplete = true;
         conversation.Title = "Новый диалог";

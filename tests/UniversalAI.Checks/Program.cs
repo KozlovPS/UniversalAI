@@ -132,6 +132,8 @@ using (var queue = new BenchmarkQueue(runner, store, NullLogger<BenchmarkQueue>.
     var firstQueued = await queue.SubmitAsync("day4", new() { ProviderId = "ollama", Model = "fake-local" });
     await fake.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
     var secondQueued = await queue.SubmitAsync("day4", new() { ProviderId = "ollama", Model = "fake-local" });
+    await ExpectFailure(() => queue.DeleteAsync(firstQueued.Id), "Активный прогон нельзя удалить через сервис очереди");
+    await ExpectFailure(() => queue.DeleteAsync(secondQueued.Id), "Ожидающий прогон нельзя удалить до отмены");
     await queue.CancelAsync(secondQueued.Id);
     await queue.CancelAsync(firstQueued.Id);
     for (int attempt = 0; attempt < 200 && (await store.GetAsync(firstQueued.Id)).Status == RunStatus.Running; attempt++) await Task.Delay(20);
@@ -139,6 +141,16 @@ using (var queue = new BenchmarkQueue(runner, store, NullLogger<BenchmarkQueue>.
         (await store.GetAsync(secondQueued.Id)).Status == RunStatus.Cancelled && fake.RequestSizes.Count == 1,
         "Отмена активного и ожидающего прогонов не теряется между очередью и исполнителем");
     fake.Block = false;
+    await queue.DeleteAsync(secondQueued.Id);
+    Check(!(await store.ListAsync()).Any(r => r.Id == secondQueued.Id), "Отменённый ожидающий прогон удаляется из истории");
+    var afterDelete = await queue.SubmitAsync("day4", new() { ProviderId = "ollama", Model = "fake-local" });
+    for (int attempt = 0; attempt < 400 && (await store.GetAsync(afterDelete.Id)).Status is RunStatus.Running or RunStatus.Queued; attempt++) await Task.Delay(20);
+    Check((await store.GetAsync(afterDelete.Id)).Status == RunStatus.Completed, "Очередь пропускает удалённый элемент и выполняет следующий прогон");
+    await queue.DeleteAsync(afterDelete.Id);
+    Check(!Directory.Exists(store.GetDirectory(afterDelete.Id)) && Directory.Exists(store.GetDirectory(run.Id)),
+        "Удаление убирает журнал/артефакты только выбранного прогона");
+    await ExpectFailure(() => queue.DeleteAsync("../outside"), "Удаление отклоняет путь вместо RunId");
+    await ExpectFailure(() => queue.DeleteAsync(Guid.NewGuid().ToString("N")), "Удаление отсутствующего прогона возвращает ошибку");
     await queue.StopAsync(default);
 }
 using (var lease = new StorageLease(provider.GetRequiredService<AppPaths>()))
@@ -154,6 +166,7 @@ await provider.InitializeUniversalAIAsync();
 Check((await workspace.ListAsync()).Count == 0 && (await store.ListAsync()).Count == savedRuns,
     "Изменение учебной схемы пересоздаёт только БД и сохраняет файлы прогонов");
 
+await Day11Checks.RunAsync(root);
 Console.WriteLine($"Все проверки приложения пройдены. Артефакты: {root}");
 
 static void Check(bool value, string message) { if (!value) throw new InvalidOperationException(message); Console.WriteLine("OK: " + message); }

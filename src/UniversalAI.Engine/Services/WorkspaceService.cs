@@ -23,7 +23,7 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
         return new(c.Id, c.Title, c.Model, c.AgentId, c.ProviderProfileId, c.MemoryStrategy,
             c.CompressionEnabled, c.ContextKeepLastMessages, c.ContextCompressionBatchSize,
             c.Temperature, c.MaxTokens, c.SystemPrompt, c.UpdatedAt, c.FactsJson, summary?.Content,
-            c.TopP, c.FrequencyPenalty, c.PresencePenalty, c.Seed, c.ReasoningEffort, c.ReasoningBudgetTokens);
+            c.TopP, c.FrequencyPenalty, c.PresencePenalty, c.Seed, c.ReasoningEffort, c.ReasoningBudgetTokens, c.WorkingMemoryJson);
     }
 
     public Task<IReadOnlyList<ProviderInfo>> ProvidersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProviderInfo>>(
@@ -102,6 +102,9 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
             }
             if (settings.MemoryStrategy != null) c.MemoryStrategy = settings.MemoryStrategy;
             await using var transaction = await sp.GetRequiredService<AppDbContext>().Database.BeginTransactionAsync(ct);
+            if (settings.WorkingMemoryJson != null) c.WorkingMemoryJson = settings.WorkingMemoryJson;
+            if (settings.LongTermMemoryJson != null) c.FactsJson = settings.LongTermMemoryJson;
+            if (settings.ClearShortTerm) await service.ClearShortTermAsync(id, ct);
             if (settings.ResetGeneration) await service.ResetGenerationSettingsAsync(id);
             if (settings.ClearReasoning) { c.ReasoningEffort = null; c.ReasoningBudgetTokens = null; }
             await service.UpdateSettingsAsync(id, systemPrompt: settings.SystemPrompt, model: settings.Model,
@@ -118,8 +121,10 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
 
     private static void ValidateSettings(ConversationSettings s)
     {
-        if (s.MemoryStrategy != null && s.MemoryStrategy is not ("Summary" or "SlidingWindow" or "StickyFacts"))
-            throw new ArgumentException("Стратегия: Summary, SlidingWindow или StickyFacts.");
+        if (s.MemoryStrategy != null && s.MemoryStrategy is not ("Summary" or "SlidingWindow" or "StickyFacts" or "Layered"))
+            throw new ArgumentException("Стратегия: Summary, SlidingWindow, StickyFacts или Layered.");
+        if (s.WorkingMemoryJson != null) _ = Context.LayeredMemory.Parse(s.WorkingMemoryJson);
+        if (s.LongTermMemoryJson != null) _ = Context.LayeredMemory.Parse(s.LongTermMemoryJson);
         if (s.Keep is < 2 || s.Batch is < 1 || s.MaxTokens is < 1 ||
             s.Temperature is < 0 or > 2 || s.Temperature.HasValue && !double.IsFinite(s.Temperature.Value))
             throw new ArgumentException("Проверьте параметры генерации и памяти.");

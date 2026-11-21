@@ -35,6 +35,7 @@ public class ConversationEntity
     public string? ProviderProfileId { get; set; }
     public string MemoryStrategy { get; set; } = "Summary";
     public string FactsJson { get; set; } = "{}";
+    public string WorkingMemoryJson { get; set; } = "{}";
     public int FactsPromptTokens { get; set; }
     public int FactsCompletionTokens { get; set; }
     public bool FactsUsageComplete { get; set; } = true;

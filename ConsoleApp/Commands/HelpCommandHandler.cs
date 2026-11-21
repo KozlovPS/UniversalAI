@@ -66,7 +66,11 @@ public sealed class HelpCommandHandler : IConsoleCommandHandler
               /compression batch 10   Сколько старых сообщений накопить до сжатия
               /compression now        Сжать сейчас, не дожидаясь batch
               /summary                Показать сохранённую память
-              /memory Summary         Выбрать Summary, SlidingWindow или StickyFacts
+              /memory Layered         Выбрать Summary, SlidingWindow, StickyFacts или Layered
+              /working {JSON}         Явно сохранить рабочую память (строковые значения)
+              /longterm {JSON}        Явно сохранить долговременные facts
+              /layers                 Показать рабочую/долговременную память и размер окна
+              /forget-layer short     Очистить слой short, working или long
               /branch НАЗВАНИЕ        Создать и открыть независимую ветку диалога
               /paste                  Вставить многострочный текст; завершить строкой /send
               /tokens                 Статистика токенов и стоимости истории
