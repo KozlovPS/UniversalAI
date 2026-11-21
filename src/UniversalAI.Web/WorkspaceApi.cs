@@ -17,6 +17,8 @@ public static class WorkspaceApi
         api.MapGet("/conversations", (IWorkspaceClient workspace, CancellationToken ct) => workspace.ListAsync(ct));
         api.MapPost("/conversations", (CreateConversationRequest request, IWorkspaceClient workspace, CancellationToken ct) => workspace.CreateAsync(request, ct));
         api.MapGet("/conversations/{id:int}", (int id, IWorkspaceClient workspace, CancellationToken ct) => workspace.GetAsync(id, ct));
+        api.MapDelete("/conversations/{id:int}", async (int id, IWorkspaceClient workspace, CancellationToken ct) =>
+        { await workspace.DeleteAsync(id, ct); return Results.NoContent(); });
         api.MapPut("/conversations/{id:int}/settings", (int id, ConversationSettings request, IWorkspaceClient workspace, CancellationToken ct) => workspace.UpdateAsync(id, request, ct));
         api.MapGet("/conversations/{id:int}/messages", (int id, int? offset, int? limit, IWorkspaceClient workspace, CancellationToken ct) => workspace.MessagesAsync(id, offset ?? 0, limit ?? 100, ct));
         api.MapPost("/conversations/{id:int}/messages", (int id, SendMessageRequest request, IWorkspaceClient workspace, CancellationToken ct) => workspace.SendAsync(id, request.Content, ct));

@@ -29,6 +29,12 @@ public sealed class RemoteWorkspaceClient(HttpClient http) : IWorkspaceClient
     public async Task<IReadOnlyList<ConversationInfo>> ListAsync(CancellationToken ct = default) => await Get<List<ConversationInfo>>("api/conversations", ct);
     public Task<ConversationInfo> CreateAsync(CreateConversationRequest request, CancellationToken ct = default) => Post<ConversationInfo>("api/conversations", request, ct);
     public Task<ConversationInfo> GetAsync(int id, CancellationToken ct = default) => Get<ConversationInfo>($"api/conversations/{id}", ct);
+    public async Task DeleteAsync(int id, CancellationToken ct = default)
+    {
+        using var response = await http.DeleteAsync($"api/conversations/{id}", ct);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Сервер ({(int)response.StatusCode}): {await response.Content.ReadAsStringAsync(ct)}");
+    }
     public Task<MessagePage> MessagesAsync(int id, int offset = 0, int limit = 100, CancellationToken ct = default) => Get<MessagePage>($"api/conversations/{id}/messages?offset={offset}&limit={limit}", ct);
     public Task<ConversationInfo> UpdateAsync(int id, ConversationSettings settings, CancellationToken ct = default) =>
         ReadResponse<ConversationInfo>(http.PutAsJsonAsync($"api/conversations/{id}/settings", settings, Json, ct), ct);

@@ -1,0 +1,27 @@
+<aside class="panel chat-library" aria-label="Список диалогов">
+    <header class="chat-library-heading"><div><span class="eyebrow">ВАША ИСТОРИЯ</span><h2>Все диалоги <span>@Conversations.Count</span></h2></div><button class="secondary chat-refresh" title="Обновить список диалогов" aria-label="Обновить список диалогов" disabled="@Busy" @onclick="Refresh">↻</button></header>
+    <label class="sr-only" for="conversation-search">Поиск диалогов</label><input id="conversation-search" type="search" placeholder="Название или модель…" @bind="_search" @bind:event="oninput" />
+    <div class="chat-library-items">
+        @if (Conversations.Count == 0) { <div class="chat-library-empty"><span>◌</span><p>Здесь появятся ваши диалоги.</p><small>Нажмите «Новый диалог», чтобы начать.</small></div> }
+        else if (!Filtered.Any()) { <div class="chat-library-empty"><p>Ничего не найдено</p><button class="text-button" @onclick='() => _search = ""'>Сбросить поиск</button></div> }
+        @foreach (var conversation in Filtered)
+        {
+            <div class="chat-library-row @(conversation.Id == SelectedId ? "is-selected" : "")" @key="conversation.Id">
+                <button class="conversation-item" aria-current="@(conversation.Id == SelectedId ? "true" : null)" title="Открыть диалог: @conversation.Title" disabled="@Busy" @onclick="() => Select.InvokeAsync(conversation.Id)"><strong>@conversation.Title</strong><small>@conversation.Model</small><time datetime="@conversation.UpdatedAt.ToString("O")">@conversation.UpdatedAt.ToLocalTime().ToString("dd.MM.yyyy · HH:mm")</time></button>
+                <button class="chat-delete" title="Удалить диалог" aria-label="Удалить диалог: @conversation.Title" disabled="@Busy" @onclick="() => Delete.InvokeAsync(conversation)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 10v7M14 10v7" /></svg></button>
+            </div>
+        }
+    </div>
+    <footer>Выберите диалог, чтобы прочитать сообщения.</footer>
+</aside>
+@code {
+    [Parameter] public IReadOnlyList<ConversationInfo> Conversations { get; set; } = [];
+    [Parameter] public int? SelectedId { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<int> Select { get; set; }
+    [Parameter] public EventCallback<ConversationInfo> Delete { get; set; }
+    [Parameter] public EventCallback Refresh { get; set; }
+    private string _search = "";
+    private IEnumerable<ConversationInfo> Filtered => Conversations.Where(c =>
+        c.Title.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) || c.Model.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase));
+}

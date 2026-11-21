@@ -79,6 +79,37 @@ using (var http = new HttpClient(new StubHttpHandler()))
     Check(response.Content == "local-ok" && !local.Capabilities.SupportsFunctionCalling, "Локальный endpoint работает без ключа и отдельного профиля в коде");
 }
 
+var removable = await workspace.CreateAsync(new("Удаляемый диалог", "ollama", "fake-local"));
+await workspace.SendAsync(removable.Id, "Только в удаляемом диалоге");
+await workspace.UpdateAsync(removable.Id, new(WorkingMemoryJson: "{\"ticket\":\"DELETE-1\"}", LongTermMemoryJson: "{\"name\":\"Тест\"}"));
+await using (var scope = provider.CreateAsyncScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.ContextSummaries.Add(new() { ConversationId = removable.Id, Content = "Удаляемое summary" });
+    await db.SaveChangesAsync();
+}
+var keptBranch = await workspace.BranchAsync(removable.Id, "Сохранённая ветка");
+using (await provider.GetRequiredService<ConversationGate>().EnterAsync(removable.Id))
+{
+    using var cancelDeletion = new CancellationTokenSource();
+    var blockedDeletion = workspace.DeleteAsync(removable.Id, cancelDeletion.Token);
+    Check(!blockedDeletion.IsCompleted, "Удаление ждёт завершения текущей операции диалога");
+    cancelDeletion.Cancel();
+    await ExpectFailure(() => blockedDeletion, "Отмена ожидающего удаления сохраняет диалог");
+}
+Check((await workspace.MessagesAsync(removable.Id)).Total == 2, "Отменённое удаление не меняет сообщения");
+await workspace.DeleteAsync(removable.Id);
+await ExpectFailure(() => workspace.GetAsync(removable.Id), "Удалённый диалог больше не открывается");
+await using (var scope = provider.CreateAsyncScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    Check(!await db.ChatMessages.AnyAsync(m => m.ConversationId == removable.Id) && !await db.ContextSummaries.AnyAsync(s => s.ConversationId == removable.Id),
+        "Удаление диалога каскадно убирает сообщения и summary");
+}
+Check(!(await workspace.ListAsync()).Any(c => c.Id == removable.Id) && (await workspace.MessagesAsync(keptBranch.Id)).Total == 2 &&
+    (await workspace.GetAsync(keptBranch.Id)).WorkingMemoryJson.Contains("DELETE-1"), "Список обновлён, история и память независимой ветки сохранены");
+await ExpectFailure(() => workspace.DeleteAsync(removable.Id), "Повторное удаление отсутствующего диалога возвращает ошибку");
+
 fake.Reset();
 var run = await runner.CreateAsync("day4", new() { ProviderId = "ollama", Model = "fake-local" });
 run = await runner.ExecuteAsync(run);

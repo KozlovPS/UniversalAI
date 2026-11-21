@@ -4,43 +4,57 @@
 @inject IWorkspaceClient Workspace
 
 <PageTitle>Диалоги — UniversalAI</PageTitle>
-<div class="eyebrow">АГЕНТЫ И КОНТЕКСТ</div><div class="page-heading"><div><h1>Диалоги</h1><p class="muted">История, память и трасса каждого ответа.</p></div><button @onclick="New" disabled="@_busy">Новый диалог +</button></div>
+<div class="eyebrow">АГЕНТЫ И КОНТЕКСТ</div><div class="page-heading"><div><h1>Диалоги</h1><p class="muted">Все разговоры, сообщения и память в одном месте.</p></div><button @onclick="New" disabled="@Unavailable">Новый диалог +</button></div>
 @if (_error != null) { <p class="alert" role="alert">@_error</p> }
+@if (_deleteTarget is { } target)
+{
+    <div class="chat-delete-overlay"><section class="chat-delete-confirm" role="alertdialog" aria-modal="true" aria-labelledby="delete-chat-heading" aria-describedby="delete-chat-description" @onkeydown="DeleteKeyDown">
+        <span class="sr-only" tabindex="0" @onfocus="FocusConfirmDelete"></span>
+        <div><h2 id="delete-chat-heading">Удалить диалог «@target.Title»?</h2><p id="delete-chat-description">Все сообщения, настройки и память этого диалога будут удалены без возможности восстановления. Созданные из него ветки сохранятся.</p></div>
+        @if (_error != null) { <p class="alert" role="alert">@_error</p> }
+        <div class="actions"><button @ref="_cancelDelete" class="secondary" disabled="@Unavailable" @onclick="() => _deleteTarget = null">Отмена</button><button @ref="_confirmDelete" class="danger" disabled="@Unavailable" @onclick="DeleteConfirmed">Удалить навсегда</button></div>
+        <span class="sr-only" tabindex="0" @onfocus="FocusCancelDelete"></span>
+    </section></div>
+}
 <div class="chat-layout">
-<aside class="panel conversation-list">@if (_conversations.Count == 0) { <p class="muted">Создайте первый диалог.</p> }@foreach (var c in _conversations) { <button class="conversation-item @(c.Id == _current?.Id ? "selected" : "")" disabled="@_busy" @onclick="() => Open(c.Id)"><strong>@c.Title</strong><small>@c.Model</small></button> }</aside>
-<div>
+<ConversationSidebar Conversations="_conversations" SelectedId="_current?.Id" Busy="Unavailable" Select="Open" Delete="RequestDelete" Refresh="RefreshList" />
+<div class="chat-content" aria-busy="@Unavailable">
 @if (_current != null)
 {
-    <section class="panel stack">
-        <div class="section-heading"><h2>@_current.Title</h2><div class="actions"><button class="secondary" disabled="@_busy" @onclick="Branch">Создать ветку</button><button class="secondary" disabled="@_busy" @onclick="RefreshCurrent">Обновить</button></div></div>
-        <div class="form-row"><label>Подключение<select @bind="_provider" disabled="@_busy" @bind:after="ProviderChanged">@foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }</select></label><label>Агент<select @bind="_agent" disabled="@_busy">@foreach (var a in _agents) { <option value="@a.Id">@a.Name</option> }</select></label><label>Память<select @bind="_memory" disabled="@_busy"><option>Summary</option><option>SlidingWindow</option><option>StickyFacts</option><option>Layered</option></select></label></div>
-        <div class="form-row"><label>Модель<input @bind="_model" disabled="@_busy" /></label><label>Температура<input type="number" step="0.1" min="0" max="2" @bind="_temperature" disabled="@_busy" /></label><label>Лимит ответа<input type="number" min="1" @bind="_maxTokens" disabled="@_busy" /></label></div>
+    <header class="panel chat-conversation-heading"><div><span class="eyebrow">ОТКРЫТЫЙ ДИАЛОГ</span><h2>@_current.Title</h2><p>@_total сообщений · @_current.Model</p></div><div class="actions"><button class="secondary" disabled="@Unavailable" @onclick="Branch">Создать ветку</button><button class="secondary" disabled="@Unavailable" @onclick="RefreshCurrent">Обновить</button></div></header>
+    <details class="panel chat-settings"><summary>Настройки диалога <span>@_current.MemoryStrategy · @_current.AgentId</span></summary>
+    <section class="stack">
+        <div class="form-row"><label>Подключение<select @bind="_provider" disabled="@Unavailable" @bind:after="ProviderChanged">@foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }</select></label><label>Агент<select @bind="_agent" disabled="@Unavailable">@foreach (var a in _agents) { <option value="@a.Id">@a.Name</option> }</select></label><label>Память<select @bind="_memory" disabled="@Unavailable"><option>Summary</option><option>SlidingWindow</option><option>StickyFacts</option><option>Layered</option></select></label></div>
+        <div class="form-row"><label>Модель<input @bind="_model" disabled="@Unavailable" /></label><label>Температура<input type="number" step="0.1" min="0" max="2" @bind="_temperature" disabled="@Unavailable" /></label><label>Лимит ответа<input type="number" min="1" @bind="_maxTokens" disabled="@Unavailable" /></label></div>
         <details><summary>Параметры контекста</summary><div class="form-row"><label>Последние сообщения<input type="number" min="2" @bind="_keep" /></label><label>Пакет summary<input type="number" min="1" @bind="_batch" /></label><label class="check"><input type="checkbox" @bind="_enabled" /> Память включена</label></div><label>Системный промпт<textarea rows="3" @bind="_prompt"></textarea></label></details>
-        <div><button class="secondary" disabled="@_busy" @onclick="Save">Сохранить настройки</button></div>
+        <div><button class="secondary" disabled="@Unavailable" @onclick="Save">Сохранить настройки</button></div>
     </section>
+    </details>
     @if (_current.MemoryStrategy == "Layered")
     {
         <section class="panel stack">
             <h2>Слои памяти</h2>
             <p class="muted">В промпт входят последние @_current.Keep сообщений, все данные текущей задачи и долговременные facts. Каждый слой очищается отдельно. Кнопка сохранения заменяет выбранный словарь целиком. Обычная отправка сообщения их не меняет.</p>
             @if (!_current.CompressionEnabled) { <p class="callout">Память выключена: модель получает полную историю без рабочей и долговременной памяти.</p> }
-            <div><button class="secondary" disabled="@_busy" @onclick='() => EditLayer("short", true)'>Очистить текущий диалог</button></div>
-            <label>Рабочая память: данные текущей задачи (JSON, строковые значения)<textarea rows="4" @bind="_workingJson" disabled="@_busy"></textarea></label>
-            <div class="actions"><button disabled="@_busy" @onclick='() => EditLayer("working", false)'>Сохранить рабочую память</button><button class="secondary" disabled="@_busy" @onclick='() => EditLayer("working", true)'>Очистить рабочую память</button></div>
-            <label>Долговременная память: профиль, решения, знания (facts Дня 10)<textarea rows="4" @bind="_longTermJson" disabled="@_busy"></textarea></label>
-            <div class="actions"><button disabled="@_busy" @onclick='() => EditLayer("long", false)'>Сохранить долговременную память</button><button class="secondary" disabled="@_busy" @onclick='() => EditLayer("long", true)'>Очистить долговременную память</button></div>
+            <div><button class="secondary" disabled="@Unavailable" @onclick='() => EditLayer("short", true)'>Очистить текущий диалог</button></div>
+            <label>Рабочая память: данные текущей задачи (JSON, строковые значения)<textarea rows="4" @bind="_workingJson" disabled="@Unavailable"></textarea></label>
+            <div class="actions"><button disabled="@Unavailable" @onclick='() => EditLayer("working", false)'>Сохранить рабочую память</button><button class="secondary" disabled="@Unavailable" @onclick='() => EditLayer("working", true)'>Очистить рабочую память</button></div>
+            <label>Долговременная память: профиль, решения, знания (facts Дня 10)<textarea rows="4" @bind="_longTermJson" disabled="@Unavailable"></textarea></label>
+            <div class="actions"><button disabled="@Unavailable" @onclick='() => EditLayer("long", false)'>Сохранить долговременную память</button><button class="secondary" disabled="@Unavailable" @onclick='() => EditLayer("long", true)'>Очистить долговременную память</button></div>
         </section>
     }
     <section class="panel messages" aria-live="polite">
-        @if (_total > _messages.Count) { <button class="secondary" disabled="@_busy" @onclick="LoadEarlier">Показать предыдущие сообщения (@(_total - _messages.Count))</button> }
+        <div class="section-heading"><h2>Сообщения</h2><span class="muted">@_messages.Count / @_total</span></div>
+        @if (_total > _messages.Count) { <button class="secondary" disabled="@Unavailable" @onclick="LoadEarlier">Показать предыдущие сообщения (@(_total - _messages.Count))</button> }
         @if (_messages.Count == 0) { <div class="empty"><span>◌</span><h3>Начните разговор</h3><p>Выберите подключение и модель, затем отправьте сообщение.</p></div> }
         @foreach (var message in _messages) { <article class="message @message.Role"><div class="message-role">@(message.Role == "user" ? "ВЫ" : message.Role == "assistant" ? "АССИСТЕНТ" : message.Role.ToUpperInvariant())</div><div class="message-content">@message.Content</div>@if (message.ToolCalls?.Count > 0) { <details><summary>Вызовы инструментов</summary><pre>@JsonSerializer.Serialize(message.ToolCalls, new JsonSerializerOptions { WriteIndented = true })</pre></details> }</article> }
-        @if (_busy) { <p class="muted">Ожидаем ответ модели…</p> }
+        @if (_request != null) { <p class="muted">Ожидаем ответ модели…</p> }
     </section>
-    <section class="panel composer"><label class="sr-only" for="message">Сообщение</label><textarea id="message" @bind="_input" rows="3" placeholder="Введите сообщение…" disabled="@_busy"></textarea><div class="section-heading"><span class="muted">@_model</span>@if (_busy) { <button class="secondary" @onclick="Cancel">Отменить ожидание</button> } else { <button disabled="@string.IsNullOrWhiteSpace(_input)" @onclick="Send">Отправить ↑</button> }</div></section>
+    <section class="panel composer"><label class="sr-only" for="message">Сообщение</label><textarea id="message" @bind="_input" rows="3" placeholder="Введите сообщение…" disabled="@Unavailable"></textarea><div class="section-heading"><span class="muted">@_model</span>@if (_request != null) { <button class="secondary" @onclick="Cancel">Отменить ожидание</button> } else { <button disabled="@(Unavailable || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Отправить ↑</button> }</div></section>
     <section class="panel"><details><summary>Память диалога</summary><h3>Summary</h3><pre>@(_current.Summary ?? "Пока не создано")</pre><h3>Sticky Facts</h3><pre>@_current.FactsJson</pre></details></section>
     @if (_turn != null) { <section class="panel"><h2>Последний ход</h2><p>Токены API: @_turn.TokenUsage.PromptTokens вход / @_turn.TokenUsage.CompletionTokens выход. Циклы инструментов: @_turn.ToolRounds.</p>@if (_turn.Context != null) { <p class="muted">Оценка истории: @_turn.Context.RawHistoryTokens → @_turn.Context.EffectiveHistoryTokens токенов.</p> }@if (_turn.Context?.LayerTokens is { } layers) { <p>Оценка добавленных токенов по слоям: диалог @layers.ShortTerm / задача @layers.Working / долговременная @layers.LongTerm. Это локальная оценка с обрамлением сообщений, не тарифицируемый usage API.</p> }<details><summary>Трасса и статистика</summary><pre>@JsonSerializer.Serialize(_turn, new JsonSerializerOptions { WriteIndented = true })</pre></details></section> }
 }
+else { <section class="panel empty"><span>◌</span><h2>Ваше пространство для диалогов</h2><p>Выберите разговор в списке или создайте новый. Здесь будут его сообщения и память.</p></section> }
 </div></div>
 @code {
     private IReadOnlyList<ConversationInfo> _conversations = [];
@@ -52,12 +66,17 @@
     private string _provider = "", _model = "", _agent = "direct", _memory = "Summary", _prompt = "", _input = "";
     private int _keep = 6, _batch = 10, _maxTokens = 10000, _total;
     private double _temperature = 0.7;
-    private bool _enabled = true, _busy;
+    private bool _enabled = true, _busy, _opening;
+    private bool Unavailable => _busy || _opening;
+    private ConversationInfo? _deleteTarget;
+    private ElementReference _cancelDelete;
+    private ElementReference _confirmDelete;
+    private bool _focusDelete;
     private string? _error;
     private string _workingJson = "{}", _longTermJson = "{}";
     private CancellationTokenSource? _request;
-    protected override async Task OnInitializedAsync() { try { _providers = await Workspace.ProvidersAsync(); _agents = await Workspace.AgentsAsync(); _conversations = await Workspace.ListAsync(); if (_conversations.Count > 0) await Open(_conversations[0].Id); } catch (Exception e) { _error = e.Message; } }
-    private void Fill(ConversationInfo c) { _current = c; _provider = c.ProviderProfileId ?? _providers[0].Id; _model = c.Model; _agent = c.AgentId; _memory = c.MemoryStrategy; _keep = c.Keep; _batch = c.Batch; _enabled = c.CompressionEnabled; _temperature = c.Temperature; _maxTokens = c.MaxTokens; _prompt = c.SystemPrompt; _workingJson = c.WorkingMemoryJson; _longTermJson = c.FactsJson; }
+    protected override async Task OnInitializedAsync() { try { _conversations = await Workspace.ListAsync(); _providers = await Workspace.ProvidersAsync(); _agents = await Workspace.AgentsAsync(); if (_conversations.Count > 0) await Open(_conversations[0].Id); } catch (Exception e) { _error = e.Message; } }
+    private void Fill(ConversationInfo c) { _current = c; _provider = c.ProviderProfileId ?? _providers.FirstOrDefault()?.Id ?? ""; _model = c.Model; _agent = c.AgentId; _memory = c.MemoryStrategy; _keep = c.Keep; _batch = c.Batch; _enabled = c.CompressionEnabled; _temperature = c.Temperature; _maxTokens = c.MaxTokens; _prompt = c.SystemPrompt; _workingJson = c.WorkingMemoryJson; _longTermJson = c.FactsJson; }
     private async Task EditLayer(string layer, bool clear)
     {
         if (_current == null || _busy) return;
@@ -78,19 +97,59 @@
     }
     private async Task Open(int id)
     {
-        try { Fill(await Workspace.GetAsync(id)); var first = await Workspace.MessagesAsync(id, limit: 1); _total = first.Total; var page = await Workspace.MessagesAsync(id, Math.Max(0, _total - 100)); _messages = page.Items.ToList(); _turn = null; }
+        if (_opening) return;
+        _opening = true; _error = null; _deleteTarget = null;
+        try { var conversation = await Workspace.GetAsync(id); var first = await Workspace.MessagesAsync(id, limit: 1); var page = await Workspace.MessagesAsync(id, Math.Max(0, first.Total - 100)); Fill(conversation); _total = page.Total; _messages = page.Items.ToList(); _turn = null; }
         catch (Exception e) { _error = e.Message; }
+        finally { _opening = false; }
     }
-    private async Task New() { try { var c = await Workspace.CreateAsync(new()); _conversations = await Workspace.ListAsync(); await Open(c.Id); } catch (Exception e) { _error = e.Message; } }
+    private void RequestDelete(ConversationInfo conversation) { if (!Unavailable) { _error = null; _deleteTarget = conversation; _focusDelete = true; } }
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (_focusDelete) { _focusDelete = false; await _cancelDelete.FocusAsync(); } }
+    private async Task FocusConfirmDelete() => await _confirmDelete.FocusAsync();
+    private async Task FocusCancelDelete() => await _cancelDelete.FocusAsync();
+    private void DeleteKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape" && !Unavailable) _deleteTarget = null; }
+    private async Task DeleteConfirmed()
+    {
+        if (_deleteTarget == null || Unavailable) return;
+        int id = _deleteTarget.Id;
+        _busy = true; _error = null;
+        try
+        {
+            await Workspace.DeleteAsync(id);
+            _deleteTarget = null;
+            if (_current?.Id == id) { _current = null; _messages = []; _total = 0; _turn = null; _input = ""; }
+            _conversations = await Workspace.ListAsync();
+            if (_current == null && _conversations.Count > 0) await Open(_conversations[0].Id);
+        }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
+    private async Task RefreshList()
+    {
+        if (Unavailable) return;
+        _busy = true;
+        try
+        {
+            _error = null; _conversations = await Workspace.ListAsync();
+            if (_current == null || !_conversations.Any(c => c.Id == _current.Id))
+            {
+                _current = null; _messages = []; _total = 0; _turn = null;
+                if (_conversations.Count > 0) await Open(_conversations[0].Id);
+            }
+        }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
+    private async Task New() { if (Unavailable) return; _busy = true; try { var c = await Workspace.CreateAsync(new()); _conversations = await Workspace.ListAsync(); await Open(c.Id); } catch (Exception e) { _error = e.Message; } finally { _busy = false; } }
     private async Task RefreshCurrent() { if (_current != null) { await Open(_current.Id); _conversations = await Workspace.ListAsync(); } }
     private async Task LoadEarlier() { if (_current == null) return; try { var page = await Workspace.MessagesAsync(_current.Id, Math.Max(0, _total - _messages.Count - 100), Math.Min(100, _total - _messages.Count)); _messages.InsertRange(0, page.Items); } catch (Exception e) { _error = e.Message; } }
     private void ProviderChanged() { var p = _providers.First(p => p.Id == _provider); _model = p.DefaultModel; if (!p.SupportsTools) _agent = "direct"; }
     private async Task Save() { try { _error = null; await SaveCore(); } catch (Exception e) { _error = e.Message; } }
     private async Task SaveCore() { if (_current == null) return; Fill(await Workspace.UpdateAsync(_current.Id, new(Model: _model, AgentId: _agent, ProviderId: _provider, MemoryStrategy: _memory, CompressionEnabled: _enabled, Keep: _keep, Batch: _batch, Temperature: _temperature, MaxTokens: _maxTokens, SystemPrompt: _prompt))); }
-    private async Task Branch() { if (_current == null) return; try { var c = await Workspace.BranchAsync(_current.Id, _current.Title + " (ветка)"); _conversations = await Workspace.ListAsync(); await Open(c.Id); } catch (Exception e) { _error = e.Message; } }
+    private async Task Branch() { if (_current == null || Unavailable) return; _busy = true; try { var c = await Workspace.BranchAsync(_current.Id, _current.Title + " (ветка)"); _conversations = await Workspace.ListAsync(); await Open(c.Id); } catch (Exception e) { _error = e.Message; } finally { _busy = false; } }
     private async Task Send()
     {
-        if (_current == null || _busy) return; _busy = true; _error = null; _request = new();
+        if (_current == null || Unavailable) return; _busy = true; _error = null; _request = new();
         try { await SaveCore(); var turn = await Workspace.SendAsync(_current.Id, _input, _request.Token); _input = ""; await Open(_current.Id); _turn = turn; _conversations = await Workspace.ListAsync(); }
         catch (OperationCanceledException) { _error = "Ожидание отменено. Отправленный текст сохранён в поле ввода."; }
         catch (Exception e) { _error = e.Message; }

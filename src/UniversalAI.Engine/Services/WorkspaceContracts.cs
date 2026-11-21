@@ -36,6 +36,7 @@ public interface IWorkspaceClient
     Task<IReadOnlyList<ConversationInfo>> ListAsync(CancellationToken ct = default);
     Task<ConversationInfo> CreateAsync(CreateConversationRequest request, CancellationToken ct = default);
     Task<ConversationInfo> GetAsync(int id, CancellationToken ct = default);
+    Task DeleteAsync(int id, CancellationToken ct = default);
     Task<MessagePage> MessagesAsync(int id, int offset = 0, int limit = 100, CancellationToken ct = default);
     Task<ConversationInfo> UpdateAsync(int id, ConversationSettings settings, CancellationToken ct = default);
     Task ResetAsync(int id, CancellationToken ct = default);

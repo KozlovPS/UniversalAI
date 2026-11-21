@@ -64,6 +64,21 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
     public Task<ConversationInfo> GetAsync(int id, CancellationToken ct = default) =>
         InScopeAsync(sp => InfoAsync(sp.GetRequiredService<ConversationService>(), id));
 
+    public async Task DeleteAsync(int id, CancellationToken ct = default)
+    {
+        using var lease = await gate.EnterAsync(id, ct);
+        await InScopeAsync(async sp =>
+        {
+            var db = sp.GetRequiredService<AppDbContext>();
+            var conversation = await db.Conversations.SingleOrDefaultAsync(c => c.Id == id, ct)
+                ?? throw new KeyNotFoundException("Диалог не найден.");
+            // Messages and summary belong to the conversation and cascade in the same transaction.
+            db.Conversations.Remove(conversation);
+            await db.SaveChangesAsync(ct);
+            return true;
+        });
+    }
+
     public Task<ConversationInfo> CreateAsync(CreateConversationRequest request, CancellationToken ct = default) => InScopeAsync(async sp =>
     {
         var profile = profiles.Get(request.ProviderId ?? profiles.DefaultId);
