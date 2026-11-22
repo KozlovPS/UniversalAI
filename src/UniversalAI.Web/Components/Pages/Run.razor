@@ -1,0 +1,83 @@
+@page "/runs/{Id}"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject FileRunStore Store
+@inject BenchmarkQueue Queue
+@inject BenchmarkRegistry Registry
+@inject RunMetricsReader Metrics
+
+<PageTitle>Прогон — UniversalAI</PageTitle>
+<div class="run-topbar"><a class="back-link" href="/experiments">← История прогонов</a><h1>Демонстрация эксперимента</h1></div>
+@if (_error != null && _run == null) { <p class="alert" role="alert">@_error</p> }
+@if (_run != null)
+{
+    <ExperimentScreen Run="_run" Data="_view" Log="@_log" Duration="@Duration" ArtifactCount="_artifacts.Count" UpdatedAt="_updatedAt" RefreshError="@_error" ShowMemory='@(_run.BenchmarkId == "day11")' StartRecording="Recording">
+        <Actions>@if (_run.Status is RunStatus.Running or RunStatus.Queued) { <button class="screen-button" @onclick="Cancel">Остановить</button> }<button class="screen-button screen-refresh" @onclick="Refresh">Обновить</button></Actions>
+        <LaunchAction>@if (_run.Status is not (RunStatus.Running or RunStatus.Queued)) { <a class="screen-button experiment-launch" href="@($"/experiments/{_run.BenchmarkId}?fromRun={_run.Id}")" title="Посмотреть задание и сценарий перед новым запуском">Запустить эксперимент</a> }</LaunchAction>
+        <Memory>@if (_run.BenchmarkId == "day11") { <Day11Progress Report="_day11" /> } else { <p>Дополнительный разбор доступен в журнале и сохранённых отчётах.</p> }</Memory>
+        <Report><ExperimentReport Run="_run" Documents="_documents" Metrics="_metrics" /></Report>
+        <Lesson><ExperimentLesson Documents="_documents" BenchmarkId="@_run.BenchmarkId" /></Lesson>
+        <Scenario><ExperimentScenario Documents="_documents" BenchmarkId="@_run.BenchmarkId" /></Scenario>
+        <Results>
+            <section class="panel"><h2>Файлы и отчёты</h2><div class="artifact-list">@foreach (var name in _artifacts) { <div><button class="text-button" @onclick="() => Preview(name)">@name</button><a href="@($"/downloads/{Id}/{Uri.EscapeDataString(name)}")" target="_blank">Скачать ↗</a></div> }</div>@if (_artifacts.Count == 0) { <p class="muted">Файлы появятся по мере выполнения.</p> }</section>
+            @if (_preview != null) { <section class="panel"><h2>@_previewName</h2><pre class="report-preview">@_preview</pre></section> }
+        </Results>
+        <Settings><section class="panel"><h2>Условия эксперимента</h2><dl><dt>Подключение</dt><dd>@_run.Provider.BaseUrl</dd><dt>Модель</dt><dd>@_run.Model</dd><dt>Параметры</dt><dd>keep=@_run.Settings.Keep, batch=@_run.Settings.Batch, ветки=@_run.Settings.Branches</dd><dt>Снимок тарифов</dt><dd>@_run.PricingSnapshot</dd><dt>Версии</dt><dd>Сценарий @_run.ScenarioVersion / оценивание @_run.ScorerVersion</dd><dt>Начало / завершение</dt><dd>@(_run.StartedAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss") ?? "Ожидает запуска") / @(_run.FinishedAt?.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss") ?? "Ещё не завершён")</dd><dt>Полный идентификатор</dt><dd>@_run.Id</dd></dl><details><summary>Все сохранённые параметры прогона</summary><pre class="report-preview">@JsonSerializer.Serialize(_run, FileRunStore.Json)</pre></details></section></Settings>
+    </ExperimentScreen>
+}
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "recording")] public bool Recording { get; set; }
+    private BenchmarkRun? _run;
+    private IReadOnlyList<string> _artifacts = [];
+    private string _log = "", _previewName = "";
+    private string? _preview, _error;
+    private DateTimeOffset? _updatedAt;
+    private UniversalAI.Benchmarks.Day11MemoryLayersBenchmark.Report? _day11;
+    private ExperimentViewData _view = new();
+    private ExperimentDocuments _documents = new();
+    private RunMetrics? _metrics;
+    private readonly CancellationTokenSource _lifetime = new();
+    private Task? _polling;
+    private string Duration => _run?.StartedAt is { } start ? ((_run.FinishedAt ?? DateTimeOffset.UtcNow) - start).ToString(@"hh\:mm\:ss") : "—";
+    protected override async Task OnParametersSetAsync() { await Refresh(); if (_polling == null || _polling.IsCompleted) _polling = Poll(); }
+    private async Task Poll()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+        try { while (await timer.WaitForNextTickAsync(_lifetime.Token)) { await InvokeAsync(Refresh); if (_run?.Status is not (RunStatus.Running or RunStatus.Queued)) break; } }
+        catch (OperationCanceledException) { }
+    }
+    private async Task Refresh()
+    {
+        try
+        {
+            if (_run?.Id != Id) { _day11 = null; _preview = null; _previewName = ""; _metrics = null; _documents = new(); }
+            _run = await Store.GetAsync(Id, _lifetime.Token);
+            _artifacts = await Store.ArtifactsAsync(Id, _lifetime.Token);
+            _log = await UniversalAI.Web.WorkspaceApi.ReadLogTailAsync(Path.Combine(Store.GetDirectory(Id), "output.log"), _lifetime.Token, full: true);
+            _view = await ExperimentViewData.LoadAsync(Store, _run, _artifacts, _lifetime.Token, _day11);
+            _day11 = _view.Layers ?? _day11;
+            var definition = Registry.List().FirstOrDefault(d => d.Id == _run.BenchmarkId) ?? new BenchmarkDefinition(_run.BenchmarkId, "Эксперимент", "", true);
+            _documents = await ExperimentDocuments.LoadAsync(Store, _run, definition, _artifacts, _view, _lifetime.Token);
+            try { _metrics = _artifacts.Contains("api-calls.jsonl") ? await Metrics.ReadAsync(Id, _lifetime.Token) : null; }
+            catch (Exception e) when (e is JsonException or IOException) { _documents.Notices.Add("Показатели API временно недоступны. Обновите экран после записи файлов."); }
+            _updatedAt = DateTimeOffset.UtcNow;
+            _error = null;
+            StateHasChanged();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception e) { _error = e.Message; StateHasChanged(); }
+    }
+    private async Task Cancel() { try { await Queue.CancelAsync(Id); await Refresh(); } catch (Exception e) { _error = e.Message; } }
+    private async Task Preview(string name)
+    {
+        try
+        {
+            string path = await Store.ArtifactPathAsync(Id, name);
+            _previewName = name;
+            _preview = new FileInfo(path).Length > 1_048_576 ? "Файл больше 1 МБ. Скачайте его для просмотра." : await SnapshotFile.ReadAllTextAsync(path);
+        }
+        catch (Exception e) { _error = e.Message; }
+    }
+    public async ValueTask DisposeAsync() { await _lifetime.CancelAsync(); if (_polling != null) await _polling; _lifetime.Dispose(); }
+}

@@ -1,0 +1,27 @@
+<div class="experiment-document scenario-document">
+    <header class="document-heading"><div><div class="document-kicker">@BenchmarkId.ToUpperInvariant() · ИСХОДНЫЕ МАТЕРИАЛЫ</div><h2>Сценарий эксперимента</h2><p>Задачи, факты, контрольные вопросы и условия проверки</p></div><span class="scenario-count">@Documents.Materials.Groups.Sum(g => g.Items.Count)<small>материалов</small></span></header>
+    <div class="document-source">@(Documents.IsPreview ? "Планируемый сценарий текущей версии. Запросы к модели начнутся только после запуска." : Documents.HasSavedMaterials ? "Снимок материалов сохранён вместе с этим прогоном." : "Материалы восстановлены из доступных файлов этого прогона; описание методики — из приложения.")</div>
+    @if (Documents.Materials.Goal.Length > 0) { <div class="scenario-goal"><span>ЦЕЛЬ ЭКСПЕРИМЕНТА</span><p>@Documents.Materials.Goal</p></div> }
+    @if (Documents.Materials.Plan.Count > 0)
+    {
+        <section class="document-section"><h3>Порядок проверки</h3><ol class="scenario-plan">@foreach (var step in Documents.Materials.Plan) { <li>@step</li> }</ol><p class="document-caption">Это описание методики. Фактически выполненные проверки и частичные результаты — в отчёте.</p></section>
+    }
+    @foreach (var group in Documents.Materials.Groups)
+    {
+        <section class="document-section material-group"><div class="document-section-heading"><h3>@group.Title</h3><span>@group.Items.Count записей</span></div><p class="document-caption">@group.Description</p>
+            @if (group.Items.Count == 0) { <p class="document-caption">Записи этого раздела пока не сохранены.</p> }
+            @for (int i = 0; i < group.Items.Count; i++)
+            {
+                var item = group.Items[i];
+                <article class="material-item"><div class="material-label"><span>@((i + 1).ToString("D2"))</span><strong>@Label(item.Label)</strong></div><div class="material-text">@item.Text</div>@if (!string.IsNullOrWhiteSpace(item.Expected)) { <div class="material-expected"><span>Эталон</span><strong>@item.Expected</strong></div> }</article>
+            }
+        </section>
+    }
+    @foreach (var notice in Documents.Notices) { <p class="document-note" role="status">@notice</p> }
+    <footer class="document-provenance">@(Documents.IsPreview ? "После запуска ход появится в журнале, а сохранённые оценки и вывод — в итоговом отчёте." : "Набор материалов описывает сценарий; наличие записи здесь не означает, что все запросы завершились. Исходные артефакты доступны во вкладке файлов.")</footer>
+</div>
+@code {
+    [Parameter, EditorRequired] public ExperimentDocuments Documents { get; set; } = new();
+    [Parameter] public string BenchmarkId { get; set; } = "";
+    private static string Label(string key) => key switch { "user" => "Пользователь", "assistant" => "Ассистент", "short" => "Текущий диалог", "working" => "Рабочая память", "long" => "Долговременные facts", "task_export_format" => "Формат экспорта", "task_ticket" => "Номер задачи", "acceptance_owner" => "Ответственный за приёмку", "approved_budget_rubles" => "Бюджет, ₽", "system" => "Системная инструкция", _ => key };
+}

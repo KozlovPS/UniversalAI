@@ -1,0 +1,32 @@
+@page "/"
+@rendermode InteractiveServer
+@inject IWorkspaceClient Workspace
+@inject BenchmarkRegistry Registry
+@inject FileRunStore Store
+@inject AppPaths Paths
+
+<PageTitle>Лаборатория — UniversalAI</PageTitle>
+<div class="eyebrow">ЛАБОРАТОРИЯ МОДЕЛЕЙ</div>
+<div class="page-heading"><div><h1>От вопроса к эксперименту.</h1><p class="muted">Диалоги, память агентов и воспроизводимые сравнения моделей.</p></div><a class="button" href="/experiments">Новый эксперимент ↗</a></div>
+@if (_error != null) { <p class="alert" role="alert">@_error</p> }
+<div class="stats">
+    <div class="stat"><span>ДИАЛОГИ</span><strong>@_conversations</strong><small>С сохранением истории и памяти</small></div>
+    <div class="stat"><span>ЭКСПЕРИМЕНТЫ</span><strong>@Registry.List().Count</strong><small>Независимые модули заданий</small></div>
+    <div class="stat"><span>ПРОГОНЫ</span><strong>@_runs.Count</strong><small>@_runs.Count(r => r.Status == RunStatus.Completed) завершено</small></div>
+    <div class="stat"><span>В РАБОТЕ</span><strong>@_runs.Count(r => r.Status is RunStatus.Queued or RunStatus.Running)</strong><small>Выполнение на сервере</small></div>
+</div>
+<div class="two-columns">
+    <section class="panel"><div class="section-heading"><h2>Последние запуски</h2><a href="/experiments">Все прогоны →</a></div>
+        @if (_runs.Count == 0) { <div class="empty"><span>⌁</span><h3>Первый эксперимент впереди</h3><p>Выберите сценарий и модель. Здесь появятся результаты и журнал выполнения.</p><a href="/experiments">Выбрать эксперимент →</a></div> }
+        @foreach (var run in _runs.Take(5)) { <a class="run-row" href="@($"/runs/{run.Id}")"><div><strong>@run.BenchmarkId.ToUpperInvariant()</strong><small>@run.Model</small></div><span class="badge @run.Status.ToString().ToLowerInvariant()">@RunLabels.Status(run.Status)</span></a> }
+    </section>
+    <section class="panel accent-panel"><span class="eyebrow">ОДИН ДВИЖОК, НЕСКОЛЬКО КЛИЕНТОВ</span><h2>Продолжайте с любого места.</h2><p>Веб-интерфейс и удалённая консоль работают с одной историей, настройками и результатами.</p><code>dotnet run -- --server http://localhost:5080</code><a href="/chat">Открыть диалоги →</a></section>
+</div>
+<section class="panel storage-note"><div><strong>Данные отдельно от кода</strong><p class="muted">@Paths.Root</p></div><span class="pill">SQLite + файлы прогонов</span></section>
+
+@code {
+    private int _conversations;
+    private IReadOnlyList<BenchmarkRun> _runs = [];
+    private string? _error;
+    protected override async Task OnInitializedAsync() { try { _conversations = (await Workspace.ListAsync()).Count; _runs = await Store.ListAsync(); } catch (Exception e) { _error = e.Message; } }
+}

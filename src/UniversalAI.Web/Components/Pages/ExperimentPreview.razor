@@ -1,0 +1,101 @@
+@page "/experiments/{BenchmarkId}"
+@rendermode InteractiveServer
+@inject BenchmarkRegistry Registry
+@inject BenchmarkQueue Queue
+@inject FileRunStore Store
+@inject IWorkspaceClient Workspace
+@inject NavigationManager Navigation
+
+<PageTitle>Подготовка эксперимента — UniversalAI</PageTitle>
+<a class="back-link" href="/experiments">← Все эксперименты</a>
+@if (_error != null) { <p class="alert" role="alert">@_error</p> }
+@if (_definition != null)
+{
+    <div class="page-heading"><div><div class="eyebrow">@BenchmarkId.ToUpperInvariant() · ДО ЗАПУСКА</div><h1>@_definition.Name</h1><p class="muted">Сначала изучите задание и сценарий. Затем запустите эксперимент и наблюдайте ход; выводы появятся в итоговом отчёте.</p></div></div>
+    <div class="experiment-layout experiment-preparation">
+        <section class="panel stack">
+            <h2>Запуск эксперимента</h2>
+            @if (_definition.Id == "day8")
+            {
+                <label>Окно контекста выбранной модели, токенов<input type="number" min="1024" max="2000000" @bind="_contextWindow" disabled="@_busy" /></label>
+                <p class="muted">Укажите реальное окно выбранной модели. Эксперимент отправит вход длиннее этого окна и покажет фактическую ошибку провайдера. Это размер входного сценария; лимит ответа не задаётся.</p>
+            }
+            <p class="callout">Просмотр задания и сценария бесплатный: обращений к модели нет. Запуск начнётся только по кнопке ниже.</p>
+            @if (FromRun != null) { <p class="muted">Настройки скопированы из выбранного прогона. Будет создан новый запуск.</p> }
+            <label>Подключение<select @bind="_provider" @bind:after="SelectProvider" disabled="@_busy">@foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }</select></label>
+            @if (_definition.HasModel) { <label>Модель<input @bind="_model" disabled="@_busy" /></label> }
+            @if (_definition.HasReasoning) { <label>Максимальный reasoning<input @bind="_effort" placeholder="Автоматически по профилю модели" disabled="@_busy" /></label> }
+            @if (_definition.HasMemory)
+            {
+                <div class="form-row"><label>Последние сообщения<input type="number" min="2" @bind="_keep" disabled="@_busy" /></label><label>Пакет сжатия<input type="number" min="1" @bind="_batch" disabled="@_busy" /></label></div>
+                <label class="check"><input type="checkbox" @bind="_generate" disabled="@_busy" /> Создать новый общий диалог</label>
+                <label class="check"><input type="checkbox" @bind="_branches" disabled="@_busy" /> Проверять независимые ветки</label>
+            }
+            <p class="muted">Вызовы модели могут быть платными. После запуска работа продолжится на сервере, даже если закрыть страницу.</p>
+            <button disabled="@(_busy || _providers.Count == 0 || (_definition.HasModel && string.IsNullOrWhiteSpace(_model)))" @onclick="Submit">@(_busy ? "Запускаем…" : "Запустить эксперимент")</button>
+        </section>
+        <section class="panel experiment-preview-content">
+            <nav class="screen-tabs" aria-label="Подготовка эксперимента">
+                <button class='@(_tab == "lesson" ? "is-selected" : "")' aria-pressed='@(_tab == "lesson")' @onclick='() => _tab = "lesson"'>Задание дня</button>
+                <button class='@(_tab == "scenario" ? "is-selected" : "")' aria-pressed='@(_tab == "scenario")' @onclick='() => _tab = "scenario"'>Сценарий эксперимента</button>
+            </nav>
+            @if (_tab == "lesson") { <ExperimentLesson Documents="_documents" BenchmarkId="@BenchmarkId" /> }
+            else { <ExperimentScenario Documents="_documents" BenchmarkId="@BenchmarkId" /> }
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public string BenchmarkId { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "fromRun")] public string? FromRun { get; set; }
+    private BenchmarkDefinition? _definition;
+    private ExperimentDocuments _documents = new();
+    private IReadOnlyList<ProviderInfo> _providers = [];
+    private string _provider = "", _model = "", _effort = "", _tab = "lesson";
+    private int _keep = 6, _batch = 10, _contextWindow = 128000;
+    private bool _generate, _branches = true, _busy;
+    private string? _error;
+    protected override async Task OnParametersSetAsync()
+    {
+        _error = null; _definition = null; _tab = "lesson";
+        try
+        {
+            _definition = Registry.Get(BenchmarkId).Definition;
+            _documents = ExperimentDocuments.Preview(_definition);
+            _providers = (await Workspace.ProvidersAsync()).Where(p => p.Type == "OpenAICompatible").ToList();
+            _provider = _providers.FirstOrDefault(p => p.Id == "proxyapi")?.Id ?? _providers.FirstOrDefault()?.Id ?? "";
+            _effort = ""; _keep = 6; _batch = 10; _generate = false; _branches = true;
+            _contextWindow = 128000;
+            SelectProvider();
+            if (FromRun != null)
+            {
+                var source = await Store.GetAsync(FromRun);
+                if (!source.BenchmarkId.Equals(_definition.Id, StringComparison.OrdinalIgnoreCase))
+                    throw new ArgumentException("Выбранный прогон относится к другому эксперименту.");
+                var s = source.Settings;
+                _provider = s.ProviderId; _model = s.Model ?? source.Model; _effort = s.HighEffort ?? "";
+                _keep = s.Keep; _batch = s.Batch; _generate = s.Generate; _branches = s.Branches;
+                _contextWindow = s.ContextWindowTokens;
+            }
+        }
+        catch (Exception e) { _definition = null; _error = e.Message; }
+    }
+    private void SelectProvider()
+    {
+        _model = _providers.FirstOrDefault(p => p.Id == _provider)?.DefaultModel ?? "";
+        if (_provider == "proxyapi" && _definition?.Id is "day2" or "day4" or "day8" or "day9" or "day10") _model = "openai/gpt-4o-mini";
+    }
+    private async Task Submit()
+    {
+        if (_busy || _definition == null) return;
+        _busy = true; _error = null;
+        try
+        {
+            var run = await Queue.SubmitAsync(_definition.Id, new BenchmarkSettings { ProviderId = _provider,
+                Model = _definition.HasModel ? _model : null, HighEffort = string.IsNullOrWhiteSpace(_effort) ? null : _effort,
+                Keep = _keep, Batch = _batch, Generate = _generate, Branches = _branches, ContextWindowTokens = _contextWindow });
+            Navigation.NavigateTo($"/runs/{run.Id}?recording=true");
+        }
+        catch (Exception e) { _error = e.Message; _busy = false; }
+    }
+}

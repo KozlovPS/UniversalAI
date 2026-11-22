@@ -1,0 +1,24 @@
+<div class="experiment-document lesson-document">
+    <header class="document-heading"><div><div class="document-kicker">@BenchmarkId.ToUpperInvariant() · ЗАДАНИЕ ДНЯ</div><h2>@Documents.Materials.Title</h2><p>Что требовалось реализовать и проверить</p></div><span class="document-symbol">↗</span></header>
+    @if (Assignment is { Length: > 0 } assignment)
+    {
+        <div class="document-source">@AssignmentSource</div>
+        @if (Documents.IsPreview) { <p class="document-note">Задание текущей версии эксперимента. Прогон ещё не запущен.</p> }
+        else if (Documents.HasSavedMaterials && Documents.Materials.Assignment != Assignment) { <p class="document-note">Показан полный актуальный текст DAYS.md. Исходный снимок условий этого прогона сохранён без изменений в experiment-materials.json во вкладке «Файлы»; старые результаты не переоцениваются.</p> }
+        else if (!Documents.HasSavedMaterials) { <p class="document-note">В этом архиве нет отдельного снимка задания. Показан добавленный текст задания дня; материалы и результаты самого прогона находятся в соседних вкладках.</p> }
+        <section class="document-section assignment-text"><ReadableReport Text="@assignment" /></section>
+    }
+    else
+    {
+        <div class="document-empty"><span>↗</span><h3>Исходное задание пока не добавлено</h3><p>Полная формулировка этого учебного дня появится после её добавления. Использованные задачи, факты и вопросы уже можно посмотреть во вкладке «Сценарий эксперимента».</p></div>
+    }
+</div>
+@code {
+    [Parameter, EditorRequired] public ExperimentDocuments Documents { get; set; } = new();
+    [Parameter] public string BenchmarkId { get; set; } = "";
+    private CourseAssignment? CurrentAssignment => CourseAssignments.Find(BenchmarkId);
+    private string? Assignment => CurrentAssignment?.Text ?? Documents.Materials.Assignment;
+    private string? AssignmentSource => CurrentAssignment is { } source
+        ? $"DAYS.md · полный исходник от {CourseAssignments.Snapshot.ReadOn} · SHA256 {source.Sha256}"
+        : Documents.Materials.AssignmentSource;
+}

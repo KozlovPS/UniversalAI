@@ -1,0 +1,327 @@
+[
+  {
+    "Detail": "Название",
+    "Expected": "Кедр",
+    "Question": "Как называется проект?",
+    "Full": {
+      "Content": "Проект называется «Кедр».",
+      "FinishReason": "stop",
+      "PromptTokens": 1768,
+      "CompletionTokens": 8,
+      "TotalTokens": 1776,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "Проект называется «Кедр».",
+      "FinishReason": "stop",
+      "PromptTokens": 1148,
+      "CompletionTokens": 8,
+      "TotalTokens": 1156,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  },
+  {
+    "Detail": "Имя",
+    "Expected": "Марина Соколова",
+    "Question": "Кто отвечает за приёмку? Назови имя и фамилию.",
+    "Full": {
+      "Content": "Марина Соколова.",
+      "FinishReason": "stop",
+      "PromptTokens": 1780,
+      "CompletionTokens": 6,
+      "TotalTokens": 1786,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "Марина Соколова.",
+      "FinishReason": "stop",
+      "PromptTokens": 1160,
+      "CompletionTokens": 6,
+      "TotalTokens": 1166,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  },
+  {
+    "Detail": "Срок",
+    "Expected": "18 декабря 2026",
+    "Question": "Какой точный срок сдачи, включая год?",
+    "Full": {
+      "Content": "18 декабря 2026 года.",
+      "FinishReason": "stop",
+      "PromptTokens": 1775,
+      "CompletionTokens": 7,
+      "TotalTokens": 1782,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "18 декабря 2026 года.",
+      "FinishReason": "stop",
+      "PromptTokens": 1155,
+      "CompletionTokens": 7,
+      "TotalTokens": 1162,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  },
+  {
+    "Detail": "Бюджет",
+    "Expected": "420000 рублей",
+    "Question": "Какой актуальный бюджет в рублях? Верни только число.",
+    "Full": {
+      "Content": "420000.",
+      "FinishReason": "stop",
+      "PromptTokens": 1778,
+      "CompletionTokens": 3,
+      "TotalTokens": 1781,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "420000",
+      "FinishReason": "stop",
+      "PromptTokens": 1158,
+      "CompletionTokens": 2,
+      "TotalTokens": 1160,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  },
+  {
+    "Detail": "Ограничение",
+    "Expected": "Полностью офлайн, облако запрещено",
+    "Question": "Разрешены ли облачные сервисы? Ответь только ДА или НЕТ.",
+    "Full": {
+      "Content": "НЕТ.",
+      "FinishReason": "stop",
+      "PromptTokens": 1782,
+      "CompletionTokens": 3,
+      "TotalTokens": 1785,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "НЕТ.",
+      "FinishReason": "stop",
+      "PromptTokens": 1162,
+      "CompletionTokens": 3,
+      "TotalTokens": 1165,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  },
+  {
+    "Detail": "Платформа",
+    "Expected": "Windows 11",
+    "Question": "Какая целевая операционная система и её версия?",
+    "Full": {
+      "Content": "Windows 11.",
+      "FinishReason": "stop",
+      "PromptTokens": 1776,
+      "CompletionTokens": 4,
+      "TotalTokens": 1780,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "Windows 11.",
+      "FinishReason": "stop",
+      "PromptTokens": 1156,
+      "CompletionTokens": 4,
+      "TotalTokens": 1160,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  },
+  {
+    "Detail": "Команда",
+    "Expected": "3 человека",
+    "Question": "Сколько человек в команде разработки? Верни только число.",
+    "Full": {
+      "Content": "3",
+      "FinishReason": "stop",
+      "PromptTokens": 1778,
+      "CompletionTokens": 1,
+      "TotalTokens": 1779,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "3",
+      "FinishReason": "stop",
+      "PromptTokens": 1158,
+      "CompletionTokens": 1,
+      "TotalTokens": 1159,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  },
+  {
+    "Detail": "База",
+    "Expected": "SQLite",
+    "Question": "Какую базу данных утвердили?",
+    "Full": {
+      "Content": "SQLite.",
+      "FinishReason": "stop",
+      "PromptTokens": 1773,
+      "CompletionTokens": 2,
+      "TotalTokens": 1775,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "SQLite.",
+      "FinishReason": "stop",
+      "PromptTokens": 1153,
+      "CompletionTokens": 2,
+      "TotalTokens": 1155,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  },
+  {
+    "Detail": "Каталог",
+    "Expected": "D:\\Kedr\\Data",
+    "Question": "В каком точном каталоге лежат рабочие данные?",
+    "Full": {
+      "Content": "Рабочие данные лежат в каталоге D:\\Kedr\\Data.",
+      "FinishReason": "stop",
+      "PromptTokens": 1776,
+      "CompletionTokens": 16,
+      "TotalTokens": 1792,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "D:\\\\Kedr\\\\Data.",
+      "FinishReason": "stop",
+      "PromptTokens": 1156,
+      "CompletionTokens": 8,
+      "TotalTokens": 1164,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  },
+  {
+    "Detail": "Пилот",
+    "Expected": "12 сотрудников",
+    "Question": "Сколько сотрудников в пилотной группе? Верни только число.",
+    "Full": {
+      "Content": "12.",
+      "FinishReason": "stop",
+      "PromptTokens": 1778,
+      "CompletionTokens": 2,
+      "TotalTokens": 1780,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "12",
+      "FinishReason": "stop",
+      "PromptTokens": 1158,
+      "CompletionTokens": 1,
+      "TotalTokens": 1159,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  },
+  {
+    "Detail": "Напоминание",
+    "Expected": "09:30",
+    "Question": "В какое время появляется ежедневное напоминание?",
+    "Full": {
+      "Content": "Ежедневное напоминание появляется в 09:30.",
+      "FinishReason": "stop",
+      "PromptTokens": 1774,
+      "CompletionTokens": 14,
+      "TotalTokens": 1788,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "09:30.",
+      "FinishReason": "stop",
+      "PromptTokens": 1154,
+      "CompletionTokens": 4,
+      "TotalTokens": 1158,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  },
+  {
+    "Detail": "Экспорт",
+    "Expected": "CSV, UTF-8",
+    "Question": "Какой формат экспорта и кодировку утвердили? Назови оба.",
+    "Full": {
+      "Content": "CSV, UTF-8.",
+      "FinishReason": "stop",
+      "PromptTokens": 1780,
+      "CompletionTokens": 6,
+      "TotalTokens": 1786,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "CSV (UTF-8).",
+      "FinishReason": "stop",
+      "PromptTokens": 1160,
+      "CompletionTokens": 6,
+      "TotalTokens": 1166,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  },
+  {
+    "Detail": "Решение",
+    "Expected": "Мобильная версия исключена",
+    "Question": "Входит ли мобильная версия в первый релиз? Ответь только ДА или НЕТ.",
+    "Full": {
+      "Content": "НЕТ.",
+      "FinishReason": "stop",
+      "PromptTokens": 1784,
+      "CompletionTokens": 3,
+      "TotalTokens": 1787,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "Compressed": {
+      "Content": "НЕТ.",
+      "FinishReason": "stop",
+      "PromptTokens": 1164,
+      "CompletionTokens": 3,
+      "TotalTokens": 1167,
+      "ToolCalls": [],
+      "FunctionsStateId": null
+    },
+    "FullCorrect": true,
+    "CompressedCorrect": true
+  }
+]

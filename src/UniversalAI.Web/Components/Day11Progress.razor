@@ -1,0 +1,51 @@
+@using UniversalAI.Benchmarks
+@if (Report != null && (Report.Snapshots.FirstOrDefault(s => s.Stage == _stage) ?? Report.Snapshots.LastOrDefault()) is { } snapshot)
+{
+    <section class="panel stack" aria-live="polite">
+        <div class="eyebrow">ДЕНЬ 11 · ПАМЯТЬ В ДЕЙСТВИИ</div>
+        <h2>@StageName(snapshot.Stage)</h2>
+        <label>Просмотр этапа<select @bind="_stage"><option value="">Следить за текущим этапом</option>@foreach (var saved in Report.Snapshots) { <option value="@saved.Stage">@StageName(saved.Stage)</option> }</select></label>
+        <p>Проверено @Report.Observations.Count из 24 вопросов. Очистка идёт по порядку: диалог → задача → долговременные facts.</p>
+        <div class="stats">
+            <div class="stat"><span>ТЕКУЩИЙ ДИАЛОГ</span><strong>@snapshot.ShortTerm.Count сообщений</strong><small>~@snapshot.Tokens.ShortTerm токенов</small></div>
+            <div class="stat"><span>РАБОЧАЯ ПАМЯТЬ</span><strong>@snapshot.Working.Count записей</strong><small>~@snapshot.Tokens.Working токенов</small></div>
+            <div class="stat"><span>ДОЛГОВРЕМЕННЫЕ FACTS</span><strong>@snapshot.LongTerm.Count записей</strong><small>~@snapshot.Tokens.LongTerm токенов</small></div>
+        </div>
+        <p class="muted">Токены слоёв — локальная оценка с обрамлением. Фактический usage API относится ко всему запросу.</p>
+        <div class="two-columns">
+            <div><h3>Данные задачи</h3>@foreach (var item in snapshot.Working) { <p><strong>@item.Key:</strong> @item.Value</p> }@if (snapshot.Working.Count == 0) { <p>Слой пуст.</p> }</div>
+            <div><h3>Сохранённые facts</h3>@foreach (var item in snapshot.LongTerm) { <p><strong>@item.Key:</strong> @item.Value</p> }@if (snapshot.LongTerm.Count == 0) { <p>Слой пуст.</p> }</div>
+        </div>
+        <div class="two-columns">
+            <div><h3>Что сейчас видит модель</h3>
+                @if (snapshot.PromptMessages.Count == 0) { <p>Все слои пусты. Только системное правило и текущий вопрос.</p> }
+                @foreach (var message in snapshot.PromptMessages) { <article class="message"><strong>@message.Role</strong><div class="message-content">@message.Content</div></article> }
+            </div>
+            <div><h3>Вопросы и ответы текущего этапа</h3>
+                @foreach (var row in Report.Observations.Where(o => o.Stage == snapshot.Stage))
+                {
+                    <article class="message">
+                        <strong>@row.Question</strong>
+                        <p>Источник: @LayerName(row.Layer) · @(row.FactAvailable ? "данные доступны" : "слой очищен")</p>
+                        <p>Ожидание: @row.Expected</p><p>Ответ: @row.Answer</p>
+                        <span class="badge @(row.Passed ? "completed" : "failed")">@(row.Passed ? "ПРОЙДЕНО" : "ОШИБКА")</span>
+                    </article>
+                }
+            </div>
+        </div>
+        <h3>Как менялась доступность данных</h3>
+        @foreach (var group in Report.Observations.GroupBy(o => o.Stage))
+        {
+            <p><strong>@StageName(group.Key)</strong>: доступные факты — @group.Count(o => o.FactAvailable && o.Passed)/@group.Count(o => o.FactAvailable);
+                корректное «НЕИЗВЕСТНО» — @group.Count(o => !o.FactAvailable && o.Passed)/@group.Count(o => !o.FactAvailable).</p>
+        }
+        <p>@(Report.Completed ? "Протокол завершён. Все этапы и исходные ответы сохранены в отчёте." : "Протокол ещё не завершён; показаны сохранённые промежуточные результаты.")</p>
+    </section>
+}
+@code {
+    [Parameter] public Day11MemoryLayersBenchmark.Report? Report { get; set; }
+    private string _stage = "";
+    private static string StageName(string stage) => stage switch
+    { "all" => "1. Все три слоя заполнены", "clear-short" => "2. Текущий диалог очищен", "clear-working" => "3. Рабочая память тоже очищена", _ => "4. Долговременные facts тоже очищены" };
+    private static string LayerName(string layer) => layer switch { "short" => "текущий диалог", "working" => "рабочая память", _ => "долговременная память" };
+}

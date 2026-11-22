@@ -1,0 +1,43 @@
+<div class="experiment-document final-report">
+    <section class="report-conclusion @(!Complete ? "is-provisional" : "")" aria-label="Общий вывод эксперимента">
+        <div class="document-kicker">ГЛАВНОЕ ОБ ЭКСПЕРИМЕНТЕ</div>
+        <h2>@(Complete ? "Итоговый вывод" : "Предварительный вывод")</h2>
+        @if (!Complete) { <p class="conclusion-status">@(Active ? "Эксперимент продолжается. Вывод основан только на уже сохранённых проверках." : "Прогон завершён не полностью. Общий результат эксперимента пока не подтверждён.")</p> }
+        <p class="conclusion-finding">@Documents.Conclusion.Finding</p>
+        <p class="conclusion-evidence">@Documents.Conclusion.Evidence</p>
+        <p class="conclusion-scope">@Documents.Conclusion.Scope</p>
+    </section>
+    <header class="document-heading"><div><div class="document-kicker">@Run.BenchmarkId.ToUpperInvariant() · РЕЗУЛЬТАТЫ ЭКСПЕРИМЕНТА</div><h2>@ReportTitle</h2><p>@Documents.Materials.Title · @Run.Model</p></div><span class="report-seal @(Complete ? "is-complete" : "is-partial")">@(Complete ? "✓ Протокол завершён" : Active ? "◌ Обновляется" : "! Частичные результаты")</span></header>
+    @if (!Complete) { <div class="document-note">@(Active ? "Эксперимент продолжается. Ниже — уже сохранённые результаты; окончательные выводы появятся после завершения." : "Прогон не завершён полностью. Показаны сохранённые оценки и измерения, без подмены их полным результатом.")</div> }
+    <div class="report-kpis">
+        <div><span>ПРОЙДЕНО ПРОВЕРОК</span><strong>@(Documents.Outcomes.Sum(o => o.Total) == 0 ? "Н/д" : $"{Documents.Outcomes.Sum(o => o.Passed)} / {Documents.Outcomes.Sum(o => o.Total)}")</strong><small>С учётом вариантов и повторов</small></div>
+        <div><span>ТОКЕНЫ API</span><strong>@(Metrics?.PromptTokens is { } input && Metrics.CompletionTokens is { } output ? (input + output).ToString("N0") : "Н/д")</strong><small>@(Metrics?.PromptTokens is { } p && Metrics.CompletionTokens is { } c ? $"{p:N0} входных · {c:N0} выходных" : "Usage доступен не для всех вызовов")</small></div>
+        <div><span>ВРЕМЯ API</span><strong>@(Metrics == null ? "Н/д" : $"{Metrics.TotalApiSeconds:F1} с")</strong><small>@(Metrics?.Calls.ToString() ?? "—") обращений · ошибок API: @(Metrics?.Errors.ToString() ?? "Н/д")</small></div>
+        <div><span>РАСЧЁТНАЯ СТОИМОСТЬ</span><strong>@(Metrics?.EstimatedRubles is { } cost ? $"{cost:N4} ₽" : "Н/д")</strong><small>Тарифы прогона: @Run.PricingSnapshot</small></div>
+    </div>
+    @if (Documents.Outcomes.Count > 0)
+    {
+        <section class="document-section"><div class="document-section-heading"><h3>Сохранённые оценки</h3><span>Без повторного оценивания</span></div>
+            <div class="outcome-list">
+                @foreach (var outcome in Documents.Outcomes)
+                {
+                    <div class="outcome-row"><div><strong>@outcome.Label</strong><p>@outcome.Note</p></div><div class="outcome-result"><strong>@outcome.Passed <span>/ @outcome.Total</span></strong><div class="outcome-meter" aria-hidden="true"><span style="width:@(outcome.Total == 0 ? 0 : Math.Clamp(100 * outcome.Passed / outcome.Total, 0, 100))%"></span></div></div></div>
+                }
+            </div>
+        </section>
+    }
+    @foreach (var notice in Documents.Notices) { <p class="document-note" role="status">@notice</p> }
+    <section class="document-section"><div class="document-section-heading"><h3>Подробный отчёт</h3>@if (Documents.ReportFile != null) { <a class="screen-button" href="@($"/downloads/{Run.Id}/{Uri.EscapeDataString(Documents.ReportFile)}")">Скачать Markdown ↓</a> }</div>
+        @if (Documents.ReportText is { } text) { <ReadableReport Text="@text" /> }
+        else { <div class="document-empty"><span>◫</span><h3>Подробный файл пока не записан</h3><p>Доступные измерения показаны выше. Исходные запросы, ответы и файлы остаются во вкладках этого прогона.</p></div> }
+    </section>
+    <footer class="document-provenance">Источник: артефакты прогона @Run.Id[..8] · Сценарий @Run.ScenarioVersion / оценивание @Run.ScorerVersion.<br />Стоимость — расчёт по снимку тарифов, не фактическое списание. Успешное выполнение протокола и качество ответов оцениваются отдельно.</footer>
+</div>
+@code {
+    [Parameter, EditorRequired] public BenchmarkRun Run { get; set; } = null!;
+    [Parameter, EditorRequired] public ExperimentDocuments Documents { get; set; } = new();
+    [Parameter] public RunMetrics? Metrics { get; set; }
+    private bool Active => Run.Status is RunStatus.Running or RunStatus.Queued;
+    private bool Complete => Run.Status == RunStatus.Completed && Documents.ReportComplete != false;
+    private string ReportTitle => Active ? "Промежуточный отчёт" : Complete ? "Итоговый отчёт" : "Частичный отчёт";
+}

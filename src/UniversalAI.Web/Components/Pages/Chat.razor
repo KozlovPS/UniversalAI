@@ -1,0 +1,313 @@
+@page "/chat"
+@using Microsoft.JSInterop
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject IWorkspaceClient Workspace
+
+<PageTitle>Диалоги — UniversalAI</PageTitle>
+<div class="eyebrow">ВАШИ РАЗГОВОРЫ</div><div class="page-heading"><div><h1>Диалоги</h1><p class="muted">Просто напишите сообщение. Дополнительные возможности подключаются по желанию.</p></div><button @onclick="New" disabled="@Unavailable">Новый диалог +</button></div>
+@if (_error != null) { <p class="alert" role="alert">@_error</p> }
+@if (_deleteTarget is { } target)
+{
+    <div class="chat-delete-overlay"><section class="chat-delete-confirm" role="alertdialog" aria-modal="true" aria-labelledby="delete-chat-heading" aria-describedby="delete-chat-description" @onkeydown="DeleteKeyDown">
+        <span class="sr-only" tabindex="0" @onfocus="FocusConfirmDelete"></span>
+        <div><h2 id="delete-chat-heading">Удалить диалог «@target.Title»?</h2><p id="delete-chat-description">Все сообщения, настройки и память этого диалога будут удалены без возможности восстановления. Созданные из него ветки сохранятся.</p></div>
+        @if (_error != null) { <p class="alert" role="alert">@_error</p> }
+        <div class="actions"><button @ref="_cancelDelete" class="secondary" disabled="@Unavailable" @onclick="() => _deleteTarget = null">Отмена</button><button @ref="_confirmDelete" class="danger" disabled="@Unavailable" @onclick="DeleteConfirmed">Удалить навсегда</button></div>
+        <span class="sr-only" tabindex="0" @onfocus="FocusCancelDelete"></span>
+    </section></div>
+}
+<div class="chat-layout">
+<ConversationSidebar Conversations="_conversations" SelectedId="_current?.Id" Busy="Unavailable" Select="Open" Delete="RequestDelete" Refresh="RefreshList" />
+<div class="chat-content" aria-busy="@Unavailable">
+@if (_current != null)
+{
+    <header class="panel chat-conversation-heading"><div><span class="eyebrow">ОТКРЫТЫЙ ДИАЛОГ</span><h2>@_current.Title</h2><p>@_total сообщений · @_current.Model</p></div><div class="actions"><button class="secondary" disabled="@Unavailable" @onclick="Branch">Создать ветку</button><button class="secondary" disabled="@Unavailable" @onclick="RefreshCurrent">Обновить</button></div></header>
+    <details class="panel chat-settings"><summary>Настройки диалога <span>@_current.MemoryStrategy · @_current.AgentId</span></summary>
+    <section class="stack">
+        <div class="form-row"><label>Подключение<select @bind="_provider" disabled="@Unavailable" @bind:after="ProviderChanged">@foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }</select></label><label>Ответы<select @bind="_agent" disabled="@Unavailable">@foreach (var a in _agents.Where(a => a.Id is "direct" or "tools" or "evolving")) { <option value="@a.Id">@a.Name</option> }</select></label><label>Память<select @bind="_memory" disabled="@Unavailable"><option>Summary</option><option>SlidingWindow</option><option>StickyFacts</option><option>Layered</option></select></label></div>
+        <div class="form-row"><label>Модель<input @bind="_model" disabled="@Unavailable" /></label><label>Температура<input type="number" step="0.1" min="0" max="2" @bind="_temperature" disabled="@Unavailable" /></label><label>Лимит ответа<input type="number" min="1" @bind="_maxTokens" disabled="@Unavailable" /></label></div>
+        <details><summary>Параметры контекста</summary><div class="form-row"><label>Последние сообщения<input type="number" min="2" @bind="_keep" /></label><label>Пакет summary<input type="number" min="1" @bind="_batch" /></label><label class="check"><input type="checkbox" @bind="_enabled" /> Память включена</label></div><label>Системный промпт<textarea rows="3" @bind="_prompt"></textarea></label></details>
+        <div><button class="secondary" disabled="@Unavailable" @onclick="Save">Сохранить настройки</button></div>
+    </section>
+    </details>
+    <details class="panel chat-modules" @key="_current.Id"><summary>Возможности диалога <span>@ModuleDescription</span></summary>
+    <p class="muted">Для обычного разговора ничего подключать не нужно. Отключение сохраняет настройки и результаты модуля — к ним можно вернуться позже.</p>
+    <div class="chat-module-list">
+        <div class="chat-module-card"><div><strong>Задачи</strong><p>План, утверждение, выполнение и проверка результата.</p></div><button class="secondary" disabled="@Unavailable" aria-pressed="@Modules.Tasks" @onclick='() => ToggleModule("tasks")'>@(Modules.Tasks ? "Отключить задачи" : "Подключить задачи")</button></div>
+        <div class="chat-module-card"><div><strong>Персонализация</strong><p>Ваши предпочтения к стилю и подробности ответов.</p></div><button class="secondary" disabled="@Unavailable" aria-pressed="@Modules.Personalization" @onclick='() => ToggleModule("profile")'>@(Modules.Personalization ? "Отключить персонализацию" : "Подключить персонализацию")</button></div>
+        <div class="chat-module-card"><div><strong>Инварианты</strong><p>Строгая проверка разрешённых решений. Этот режим имеет приоритет над задачами и свободным чатом.</p></div><button class="secondary" disabled="@Unavailable" aria-pressed="@Modules.Invariants" @onclick='() => ToggleModule("invariants")'>@(Modules.Invariants ? "Отключить инварианты" : "Подключить инварианты")</button></div>
+    </div>
+    @if (Modules.Tasks)
+    {
+        @if (Modules.Invariants) { <p class="callout">Задача сохранена. Для её выполнения отключите строгий режим инвариантов.</p> }
+        <TaskStatePanel @key="_current.Id" State="_current.TaskState" Busy="@(Unavailable || Modules.Invariants)" Command="TaskCommand" />
+    }
+    @if (Modules.Invariants)
+    {
+    <details class="panel"><summary>Инварианты и журнал изменений</summary>
+        <div class="form-row"><label>Ключ правила<input @bind="_invariantKey" placeholder="stack" disabled="@Unavailable" /></label><label>Разрешённое значение<input @bind="_invariantValue" placeholder="C#" disabled="@Unavailable" /></label></div>
+        <button disabled="@(Unavailable || string.IsNullOrWhiteSpace(_invariantKey) || string.IsNullOrWhiteSpace(_invariantValue))" @onclick="SaveInvariant">Сохранить правило</button>
+        <p>Задайте в поле сообщения: <code>/invariant set stack = C#</code>. Просмотр: <code>/invariant list</code>, история замен: <code>/invariant audit</code>.</p>
+        <p>Пока модуль подключён, ответы ограничены проверенными решениями или отказом. Отключение в «Возможностях диалога» возвращает обычный чат и фиксируется в журнале. Правила сохраняются.</p>
+        <pre>@_current.InvariantStateJson</pre>
+    </details>
+    }
+    @if (Modules.Personalization)
+    {
+    <section class="panel stack">
+        <h2>Профиль пользователя</h2>
+        <p class="muted">Профиль действует в этом диалоге при любой стратегии памяти. Укажите имя для включения. Ветка получает независимую копию. Очистка истории сохраняет профиль, полный сброс удаляет его.</p>
+        <div class="form-row"><label>Имя профиля<input @bind="_profileName" disabled="@Unavailable" /></label><label>Объём<select @bind="_profileLength" disabled="@Unavailable"><option value="unspecified">Не задан</option><option value="brief">Кратко (до 80 слов)</option><option value="detailed">Подробно (от 180 слов)</option></select></label></div>
+        <div class="form-row"><label>Примеры кода<select @bind="_profileCode" disabled="@Unavailable"><option value="unspecified">По задаче</option><option value="required">С кодом</option><option value="forbidden">Без кода</option></select></label><label>Тон<select @bind="_profileTone" disabled="@Unavailable"><option value="unspecified">Не задан</option><option value="formal">Формально, на Вы</option><option value="informal">Неформально, на ты</option></select></label></div>
+        <label>Дополнительные предпочтения<textarea rows="2" @bind="_profileConstraints" disabled="@Unavailable"></textarea></label>
+        <label class="check"><input type="checkbox" @bind="_profileLearn" disabled="@Unavailable" /> Пополнять профиль из моих явных предпочтений в диалоге (дополнительный запрос к модели на каждый ход)</label>
+        <div class="actions"><button disabled="@Unavailable" @onclick="SaveProfile">Сохранить профиль</button><button class="secondary" disabled="@Unavailable" @onclick="ClearProfile">Удалить профиль</button></div>
+        <details><summary>Сохранённый профиль и источники</summary><pre>@_current.UserProfileJson</pre></details>
+    </section>
+    }
+    @if (_current.AgentId == "evolving")
+    {
+        <details><summary>Обновляемая память: запись и журнал</summary>
+            <p>Явная запись: <code>@("/remember {\"Key\":\"deadline\",\"Value\":\"2026-12-20\",\"Policy\":\"replace\"}")</code></p>
+            <p>replace — замена срока, статуса, версии или требования; append — список решений и изменений; task — до завершения задачи. Время записи назначает сервер; необязательный WrittenAt задаёт время события. При равном времени остаётся сохранённое значение.</p>
+            <p>/remember list · /remember audit · /remember complete. История и журнал замен сохраняются для просмотра, в промпт входят только текущие данные и текущий вопрос. Завершение очищает рабочие и временные данные.</p>
+            <pre>@_current.EvolvingMemoryJson</pre>
+        </details>
+    }
+    @if (_current.MemoryStrategy == "Layered")
+    {
+        <section class="panel stack">
+            <h2>Слои памяти</h2>
+            <p class="muted">В промпт входят последние @_current.Keep сообщений, все данные текущей задачи и долговременные facts. Каждый слой очищается отдельно. Кнопка сохранения заменяет выбранный словарь целиком. Обычная отправка сообщения их не меняет.</p>
+            @if (!_current.CompressionEnabled) { <p class="callout">Память выключена: модель получает полную историю без рабочей и долговременной памяти.</p> }
+            <div><button class="secondary" disabled="@Unavailable" @onclick='() => EditLayer("short", true)'>Очистить текущий диалог</button></div>
+            <label>Рабочая память: данные текущей задачи (JSON, строковые значения)<textarea rows="4" @bind="_workingJson" disabled="@Unavailable"></textarea></label>
+            <div class="actions"><button disabled="@Unavailable" @onclick='() => EditLayer("working", false)'>Сохранить рабочую память</button><button class="secondary" disabled="@Unavailable" @onclick='() => EditLayer("working", true)'>Очистить рабочую память</button></div>
+            <label>Долговременная память: профиль, решения, знания (facts Дня 10)<textarea rows="4" @bind="_longTermJson" disabled="@Unavailable"></textarea></label>
+            <div class="actions"><button disabled="@Unavailable" @onclick='() => EditLayer("long", false)'>Сохранить долговременную память</button><button class="secondary" disabled="@Unavailable" @onclick='() => EditLayer("long", true)'>Очистить долговременную память</button></div>
+        </section>
+    }
+    </details>
+    <p class="chat-mode" role="status">@ModuleDescription</p>
+    <section class="panel messages" aria-live="polite">
+        <div class="section-heading"><h2>Сообщения</h2><span class="muted">@_messages.Count / @_total</span></div>
+        @if (_total > _messages.Count) { <button class="secondary" disabled="@Unavailable" @onclick="LoadEarlier">Показать предыдущие сообщения (@(_total - _messages.Count))</button> }
+        @if (_messages.Count == 0) { <div class="empty"><span>◌</span><h3>Начните разговор</h3><p>Выберите подключение и модель, затем отправьте сообщение.</p></div> }
+        @foreach (var message in _messages) { <article class="message @message.Role"><div class="message-role">@(message.Role == "user" ? "ВЫ" : message.Role == "assistant" ? "АССИСТЕНТ" : message.Role.ToUpperInvariant())</div><div class="message-content">@message.Content</div>@if (message.ToolCalls?.Count > 0) { <details><summary>Вызовы инструментов</summary><pre>@JsonSerializer.Serialize(message.ToolCalls, new JsonSerializerOptions { WriteIndented = true })</pre></details> }</article> }
+        @if (_request != null) { <p class="muted">Ожидаем ответ модели…</p> }
+    </section>
+    <section class="panel composer"><label class="sr-only" for="message">Сообщение</label><textarea id="message" @ref="_composer" @bind="_input" @bind:event="oninput" rows="3" placeholder="Введите сообщение…" aria-describedby="composer-shortcuts" disabled="@Unavailable"></textarea><div id="composer-shortcuts" class="muted">Enter — отправить · Ctrl+Enter — новая строка</div><div class="section-heading"><span class="muted">@_model</span>@if (_request != null) { <button class="secondary" @onclick="Cancel">Отменить ожидание</button> } else { <button disabled="@(Unavailable || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Отправить ↑</button> }</div></section>
+    <section class="panel"><details><summary>Память диалога</summary><h3>Summary</h3><pre>@(_current.Summary ?? "Пока не создано")</pre><h3>Sticky Facts</h3><pre>@_current.FactsJson</pre></details></section>
+    @if (_turn != null) { <section class="panel"><h2>Последний ход</h2><p>Токены API: @_turn.TokenUsage.PromptTokens вход / @_turn.TokenUsage.CompletionTokens выход. Циклы инструментов: @_turn.ToolRounds.</p>@if (_turn.Context != null) { <p class="muted">Оценка истории: @_turn.Context.RawHistoryTokens → @_turn.Context.EffectiveHistoryTokens токенов.</p> }@if (_turn.Context?.LayerTokens is { } layers) { <p>Оценка добавленных токенов по слоям: диалог @layers.ShortTerm / задача @layers.Working / долговременная @layers.LongTerm. Это локальная оценка с обрамлением сообщений, не тарифицируемый usage API.</p> }<details><summary>Трасса и статистика</summary><pre>@JsonSerializer.Serialize(_turn, new JsonSerializerOptions { WriteIndented = true })</pre></details></section> }
+}
+else { <section class="panel empty"><span>◌</span><h2>Ваше пространство для диалогов</h2><p>Выберите разговор в списке или создайте новый. Здесь будут его сообщения и память.</p></section> }
+</div></div>
+@code {
+    private IReadOnlyList<ConversationInfo> _conversations = [];
+    private IReadOnlyList<ProviderInfo> _providers = [];
+    private IReadOnlyList<AgentInfo> _agents = [];
+    private List<UniversalAI.Core.ChatMessage> _messages = [];
+    private ConversationInfo? _current;
+    private AgentTurnResult? _turn;
+    private string _provider = "", _model = "", _agent = "direct", _memory = "Summary", _prompt = "", _input = "";
+    private string _invariantKey = "", _invariantValue = "";
+    private ConversationModules Modules => _current?.Modules ?? new();
+    private string ModuleDescription => Modules.Invariants ? "Строгие инварианты" :
+        Modules.Tasks && Modules.Personalization ? "Задачи · Персонализация" :
+        Modules.Tasks ? "Задачи" : Modules.Personalization ? "Диалог · Персонализация" : "Обычный диалог";
+    private int _keep = 6, _batch = 10, _total;
+    private int? _maxTokens;
+    private string _profileName = "", _profileLength = "unspecified", _profileCode = "unspecified", _profileTone = "unspecified", _profileConstraints = "";
+    private bool _profileLearn = true;
+    private double _temperature = 0.7;
+    private bool _enabled = true, _busy, _opening;
+    private bool Unavailable => _busy || _opening;
+    private ConversationInfo? _deleteTarget;
+    private ElementReference _cancelDelete;
+    private ElementReference _confirmDelete;
+    private bool _focusDelete;
+    private string? _error;
+    private string _workingJson = "{}", _longTermJson = "{}";
+    private CancellationTokenSource? _request;
+    protected override async Task OnInitializedAsync() { try { _conversations = await Workspace.ListAsync(); _providers = await Workspace.ProvidersAsync(); _agents = await Workspace.AgentsAsync(); if (_conversations.Count > 0) await Open(_conversations[0].Id); } catch (Exception e) { _error = e.Message; } }
+    private void Fill(ConversationInfo c) { _current = c; _provider = c.ProviderProfileId ?? _providers.FirstOrDefault()?.Id ?? ""; _model = c.Model; _agent = c.AgentId is "task" or "invariants" ? "direct" : c.AgentId; _memory = c.MemoryStrategy; _keep = c.Keep; _batch = c.Batch; _enabled = c.CompressionEnabled; _temperature = c.Temperature; _maxTokens = c.MaxTokens; _prompt = c.SystemPrompt; _workingJson = c.WorkingMemoryJson; _longTermJson = c.FactsJson;
+        var p = UniversalAI.Services.Context.UserProfileMemory.Parse(c.UserProfileJson);
+        _profileName = p.Name; _profileLength = p.Length; _profileCode = p.Code; _profileTone = p.Tone; _profileConstraints = p.Constraints; _profileLearn = p.LearnFromDialogue;
+    }
+    private async Task ToggleModule(string module)
+    {
+        if (_current == null || Unavailable) return;
+        _busy = true; _error = null;
+        try
+        {
+            var modules = module switch
+            {
+                "tasks" => Modules with { Tasks = !Modules.Tasks },
+                "profile" => Modules with { Personalization = !Modules.Personalization },
+                _ => Modules with { Invariants = !Modules.Invariants }
+            };
+            string? profileJson = null;
+            if (modules.Personalization && !Modules.Personalization && string.IsNullOrWhiteSpace(_profileName))
+            {
+                var profile = UniversalAI.Services.Context.UserProfileMemory.Parse(_current.UserProfileJson);
+                profileJson = JsonSerializer.Serialize(profile with { Name = "Профиль диалога" });
+            }
+            Fill(await Workspace.UpdateAsync(_current.Id, new(Modules: modules, UserProfileJson: profileJson)));
+            _conversations = await Workspace.ListAsync();
+        }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
+    private async Task SaveInvariant()
+    {
+        await TaskCommand($"/invariant set {_invariantKey.Trim()} = {_invariantValue.Trim()}");
+    }
+    private async Task SaveProfile()
+    {
+        if (_current == null || Unavailable) return;
+        _busy = true; _error = null;
+        try
+        {
+            var previous = UniversalAI.Services.Context.UserProfileMemory.Parse(_current.UserProfileJson);
+            var p = previous with { Name = _profileName, Length = _profileLength, Code = _profileCode, Tone = _profileTone, Constraints = _profileConstraints, LearnFromDialogue = _profileLearn, Evidence = [] };
+            Fill(await Workspace.UpdateAsync(_current.Id, new(UserProfileJson: JsonSerializer.Serialize(p))));
+        }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
+    private async Task ClearProfile()
+    {
+        if (_current == null || Unavailable) return;
+        _busy = true; _error = null;
+        try { Fill(await Workspace.UpdateAsync(_current.Id, new(UserProfileJson: "{}"))); }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
+    private async Task EditLayer(string layer, bool clear)
+    {
+        if (_current == null || _busy) return;
+        _busy = true; _error = null;
+        try
+        {
+            var settings = layer switch
+            {
+                "short" => new ConversationSettings(ClearShortTerm: true),
+                "working" => new ConversationSettings(WorkingMemoryJson: clear ? "{}" : _workingJson),
+                _ => new ConversationSettings(LongTermMemoryJson: clear ? "{}" : _longTermJson)
+            };
+            await Workspace.UpdateAsync(_current.Id, settings);
+            await RefreshCurrent();
+        }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
+    private async Task Open(int id)
+    {
+        if (_opening) return;
+        _opening = true; _error = null; _deleteTarget = null;
+        try { var conversation = await Workspace.GetAsync(id); var first = await Workspace.MessagesAsync(id, limit: 1); var page = await Workspace.MessagesAsync(id, Math.Max(0, first.Total - 100)); if (_current?.Id != id) { _invariantKey = ""; _invariantValue = ""; } Fill(conversation); _total = page.Total; _messages = page.Items.ToList(); _turn = null; }
+        catch (Exception e) { _error = e.Message; }
+        finally { _opening = false; }
+    }
+    private void RequestDelete(ConversationInfo conversation) { if (!Unavailable) { _error = null; _deleteTarget = conversation; _focusDelete = true; } }
+    private ElementReference _composer;
+    private string? _boundComposerId;
+    private IJSObjectReference? _composerModule;
+    private DotNetObjectReference<Chat>? _composerReference;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusDelete) { _focusDelete = false; await _cancelDelete.FocusAsync(); }
+        if (_current != null && _boundComposerId != _composer.Id)
+        {
+            _composerModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./chat-composer.js");
+            _composerReference ??= DotNetObjectReference.Create(this);
+            await _composerModule.InvokeVoidAsync("attach", _composer, _composerReference);
+            _boundComposerId = _composer.Id;
+        }
+    }
+    [JSInvokable]
+    public async Task SendFromKeyboard(string value)
+    {
+        if (Unavailable || string.IsNullOrWhiteSpace(value)) return;
+        _input = value;
+        var pending = Send();
+        await InvokeAsync(StateHasChanged);
+        await pending;
+        await InvokeAsync(StateHasChanged);
+    }
+    private async Task FocusConfirmDelete() => await _confirmDelete.FocusAsync();
+    private async Task FocusCancelDelete() => await _cancelDelete.FocusAsync();
+    private void DeleteKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape" && !Unavailable) _deleteTarget = null; }
+    private async Task DeleteConfirmed()
+    {
+        if (_deleteTarget == null || Unavailable) return;
+        int id = _deleteTarget.Id;
+        _busy = true; _error = null;
+        try
+        {
+            await Workspace.DeleteAsync(id);
+            _deleteTarget = null;
+            if (_current?.Id == id) { _current = null; _messages = []; _total = 0; _turn = null; _input = ""; }
+            _conversations = await Workspace.ListAsync();
+            if (_current == null && _conversations.Count > 0) await Open(_conversations[0].Id);
+        }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
+    private async Task RefreshList()
+    {
+        if (Unavailable) return;
+        _busy = true;
+        try
+        {
+            _error = null; _conversations = await Workspace.ListAsync();
+            if (_current == null || !_conversations.Any(c => c.Id == _current.Id))
+            {
+                _current = null; _messages = []; _total = 0; _turn = null;
+                if (_conversations.Count > 0) await Open(_conversations[0].Id);
+            }
+        }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
+    private async Task New() { if (Unavailable) return; _busy = true; try { var c = await Workspace.CreateAsync(new()); _conversations = await Workspace.ListAsync(); await Open(c.Id); } catch (Exception e) { _error = e.Message; } finally { _busy = false; } }
+    private async Task RefreshCurrent() { if (_current != null) { await Open(_current.Id); _conversations = await Workspace.ListAsync(); } }
+    private async Task LoadEarlier() { if (_current == null) return; try { var page = await Workspace.MessagesAsync(_current.Id, Math.Max(0, _total - _messages.Count - 100), Math.Min(100, _total - _messages.Count)); _messages.InsertRange(0, page.Items); } catch (Exception e) { _error = e.Message; } }
+    private void ProviderChanged() { var p = _providers.First(p => p.Id == _provider); _model = p.DefaultModel; if (!p.SupportsTools) _agent = "direct"; }
+    private async Task Save() { try { _error = null; await SaveCore(); } catch (Exception e) { _error = e.Message; } }
+    private async Task SaveCore() { if (_current == null) return; Fill(await Workspace.UpdateAsync(_current.Id, new(Model: _model, AgentId: _agent, ProviderId: _provider, MemoryStrategy: _memory, CompressionEnabled: _enabled, Keep: _keep, Batch: _batch, Temperature: _temperature, MaxTokens: _maxTokens, ClearMaxTokens: _maxTokens == null, SystemPrompt: _prompt, Modules: Modules))); }
+    private async Task Branch() { if (_current == null || Unavailable) return; _busy = true; try { var c = await Workspace.BranchAsync(_current.Id, _current.Title + " (ветка)"); _conversations = await Workspace.ListAsync(); await Open(c.Id); } catch (Exception e) { _error = e.Message; } finally { _busy = false; } }
+    private async Task Send()
+    {
+        if (_current == null || Unavailable || string.IsNullOrWhiteSpace(_input)) return; _busy = true; _error = null; _request = new();
+        try { await SaveCore(); var turn = await Workspace.SendAsync(_current.Id, _input, _request.Token); _input = ""; await Open(_current.Id); _turn = turn; _conversations = await Workspace.ListAsync(); }
+        catch (OperationCanceledException) { _error = "Ожидание отменено. Отправленный текст сохранён в поле ввода."; }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; _request.Dispose(); _request = null; }
+    }
+    private async Task TaskCommand(string command)
+    {
+        if (_current == null || Unavailable) return;
+        _busy = true; _error = null; _request = new();
+        try
+        {
+            await SaveCore();
+            var turn = await Workspace.SendAsync(_current.Id, command, _request.Token);
+            await Open(_current.Id); _turn = turn; _conversations = await Workspace.ListAsync();
+        }
+        catch (OperationCanceledException) { _error = "Действие задачи отменено. Сохранённое состояние доступно после обновления."; }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; _request.Dispose(); _request = null; }
+    }
+    private void Cancel() => _request?.Cancel();
+    public async ValueTask DisposeAsync()
+    {
+        _request?.Cancel();
+        if (_composerModule != null)
+            try { await _composerModule.InvokeVoidAsync("detach", _composer); await _composerModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        _composerReference?.Dispose();
+    }
+}

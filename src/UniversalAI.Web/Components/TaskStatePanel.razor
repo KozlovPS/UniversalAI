@@ -1,0 +1,52 @@
+@using UniversalAI.Services.Tasks
+
+<section class="panel stack" aria-label="Состояние задачи">
+    <h2>Состояние задачи</h2>
+    <p class="muted">Переходы проверяет сервер. Утверждение плана выполняется только вашей кнопкой или командой /task approve. Очистка истории сохраняет задачу и результаты этапов.</p>
+    @if (State == null)
+    {
+        <label>Цель новой задачи<textarea rows="2" @bind="_goal" @bind:event="oninput" disabled="@Busy"></textarea></label>
+        <div><button disabled="@(Busy || string.IsNullOrWhiteSpace(_goal))" @onclick='() => Command.InvokeAsync("/task start " + _goal)'>Создать задачу</button></div>
+    }
+    else
+    {
+        <div class="form-row" aria-label="Этапы задачи">
+            @foreach (var phase in Enum.GetValues<TaskStage>())
+            { <span class="@(State.Stage == phase ? "callout" : "muted")">@(State.Stage == phase ? "● " : "○ ")@phase.ToString().ToLowerInvariant()</span> }
+        </div>
+        <p><strong>@State.Goal</strong></p>
+        <p>Режим: <strong>@(State.Paused ? "Пауза" : "Активна")</strong> · Шаг: @State.CurrentStep · Ожидаемое действие: @State.ExpectedAction · Версия: @State.Revision</p>
+        <div class="actions">
+            @if (State.Paused)
+            { <button disabled="@Busy" @onclick='() => Command.InvokeAsync("/task resume")'>Продолжить задачу</button> }
+            else
+            {
+                @if (State.Stage == TaskStage.Planning && State.Plan.Length == 0)
+                { <button disabled="@Busy" @onclick='() => Command.InvokeAsync("/task plan")'>Подготовить план</button> }
+                @if (State.Stage == TaskStage.Planning && State.Plan.Length > 0)
+                { <button disabled="@Busy" @onclick='() => Command.InvokeAsync("/task approve")'>Утвердить план</button> }
+                @if (State.Stage == TaskStage.Execution && State.Implementation.Length == 0)
+                { <button disabled="@Busy" @onclick='() => Command.InvokeAsync("/task execute")'>Выполнить план</button> }
+                @if (State.Stage == TaskStage.Execution && State.Implementation.Length > 0)
+                { <button disabled="@Busy" @onclick='() => Command.InvokeAsync("/task validate")'>Проверить результат</button> }
+                @if (State.Stage == TaskStage.Validation)
+                { <button disabled="@Busy" @onclick='() => Command.InvokeAsync("/task finish")'>Подготовить финал</button> }
+                <button class="secondary" disabled="@Busy" @onclick='() => Command.InvokeAsync("/task pause")'>Пауза задачи</button>
+                @if (State.Stage == TaskStage.Done)
+                { <button class="secondary" disabled="@Busy" @onclick='() => Command.InvokeAsync("/task clear")'>Закрыть завершённую задачу</button> }
+            }
+        </div>
+        @foreach (var part in new[] { ("Сохранённый план", State.Plan), ("Реализация", State.Implementation), ("Выполненная валидация", State.Validation), ("Финал", State.Result) })
+        {
+            @if (part.Item2.Length > 0) { <details><summary>@part.Item1</summary><div class="message-content">@part.Item2</div></details> }
+        }
+        <details><summary>История разрешённых действий</summary><ol>@foreach (var e in State.Events) { <li>@e.Action · @e.Before → @e.After · @(e.Paused ? "пауза" : "активна")</li> }</ol></details>
+    }
+</section>
+
+@code {
+    [Parameter] public TaskWorkflowState? State { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<string> Command { get; set; }
+    private string _goal = "";
+}

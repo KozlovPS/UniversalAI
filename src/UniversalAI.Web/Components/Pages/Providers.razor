@@ -1,0 +1,22 @@
+@page "/providers"
+@rendermode InteractiveServer
+@inject IWorkspaceClient Workspace
+
+<PageTitle>Подключения — UniversalAI</PageTitle>
+<div class="eyebrow">ОБЛАЧНЫЕ И ЛОКАЛЬНЫЕ LLM</div><h1>Подключения</h1>
+<p class="muted">Профили серверов и доступность ключей. Новые OpenAI-compatible подключения добавляются в конфигурации.</p>
+@if (_error != null) { <p class="alert" role="alert">@_error</p> }
+<div class="provider-grid">
+@foreach (var profile in _profiles)
+{
+    <section class="panel"><div class="section-heading"><span class="provider-icon">@profile.Name[..1]</span><span class="badge @(profile.KeyConfigured ? "completed" : "queued")">@(profile.KeyConfigured ? "Настроен" : "Нужен ключ")</span></div>
+    <h2>@profile.Name</h2><p class="muted">@profile.Type</p><dl><dt>Сервер</dt><dd>@profile.BaseUrl</dd><dt>Модель по умолчанию</dt><dd>@profile.DefaultModel</dd><dt>Инструменты</dt><dd>@(profile.SupportsTools ? "Включены профилем" : "Отключены профилем")</dd></dl>
+    <a href="/chat">Начать диалог →</a></section>
+}
+</div>
+<p class="muted">Статус «Настроен» означает, что ключ задан или не требуется. Доступность самого сервера проверяется при запросе.</p>
+@code {
+    private IReadOnlyList<ProviderInfo> _profiles = [];
+    private string? _error;
+    protected override async Task OnInitializedAsync() { try { _profiles = await Workspace.ProvidersAsync(); } catch (Exception e) { _error = e.Message; } }
+}

@@ -1,0 +1,132 @@
+[
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "Название",
+    "Question": "Как называется проект?",
+    "Expected": "Кедр",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  },
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "Имя",
+    "Question": "Кто отвечает за приёмку? Назови имя и фамилию.",
+    "Expected": "Марина Соколова",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  },
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "Срок",
+    "Question": "Какой точный срок сдачи, включая год?",
+    "Expected": "18 декабря 2026",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  },
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "Бюджет",
+    "Question": "Какой актуальный бюджет в рублях? Верни только число.",
+    "Expected": "420000 рублей",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  },
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "Ограничение",
+    "Question": "Разрешены ли облачные сервисы? Ответь только ДА или НЕТ.",
+    "Expected": "Полностью офлайн, облако запрещено",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  },
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "Платформа",
+    "Question": "Какая целевая операционная система и её версия?",
+    "Expected": "Windows 11",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  },
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "Команда",
+    "Question": "Сколько человек в команде разработки? Верни только число.",
+    "Expected": "3 человека",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  },
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "База",
+    "Question": "Какую базу данных утвердили?",
+    "Expected": "SQLite",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  },
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "Каталог",
+    "Question": "В каком точном каталоге лежат рабочие данные?",
+    "Expected": "D:\\Kedr\\Data",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  },
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "Пилот",
+    "Question": "Сколько сотрудников в пилотной группе? Верни только число.",
+    "Expected": "12 сотрудников",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  },
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "Напоминание",
+    "Question": "В какое время появляется ежедневное напоминание?",
+    "Expected": "09:30",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  },
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "Экспорт",
+    "Question": "Какой формат экспорта и кодировку утвердили? Назови оба.",
+    "Expected": "CSV, UTF-8",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  },
+  {
+    "Branch": "base",
+    "Stage": "final",
+    "Detail": "Решение",
+    "Question": "Входит ли мобильная версия в первый релиз? Ответь только ДА или НЕТ.",
+    "Expected": "Мобильная версия исключена",
+    "Accepted": [],
+    "Answer": "НЕИЗВЕСТНО.",
+    "Correct": false
+  }
+]

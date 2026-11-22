@@ -1,0 +1,54 @@
+@page "/experiments"
+@rendermode InteractiveServer
+@inject BenchmarkRegistry Registry
+@inject BenchmarkQueue Queue
+@inject FileRunStore Store
+@inject NavigationManager Navigation
+
+<PageTitle>Эксперименты — UniversalAI</PageTitle>
+<div class="eyebrow">ВОСПРОИЗВОДИМЫЕ СРАВНЕНИЯ</div><h1>Эксперименты</h1><p class="muted">Откройте эксперимент, изучите задание и сценарий, затем запустите отдельный прогон.</p>
+@if (_error != null) { <p class="alert" role="alert">@_error</p> }
+<div class="experiment-layout">
+<section class="panel stack">
+    <h2>Выберите эксперимент</h2>
+    <label>Эксперимент<select @bind="_benchmark">@foreach (var definition in Registry.List()) { <option value="@definition.Id">@definition.Id.ToUpperInvariant() · @definition.Name</option> }</select></label>
+    <p class="muted">@Selected.Description</p>
+    <p class="callout">На следующем экране можно прочитать материалы и настроить модель. Просмотр не запускает запросы.</p>
+    <button @onclick="OpenPreview">Открыть эксперимент →</button>
+</section>
+<section class="panel"><div class="section-heading"><div><h2>История прогонов</h2><p class="muted">@_runs.Count запусков</p></div><button class="secondary" @onclick="Refresh">Обновить</button></div>
+    @if (_runs.Count == 0) { <div class="empty"><span>⌁</span><h3>Здесь появятся результаты</h3><p>Каждый запуск сохраняется отдельно, включая ошибки и частичные ответы.</p></div> }
+    @if (_runs.Count > 1) { <div class="compare-bar"><span class="muted">Отметьте два прогона для сравнения</span><button class="secondary" disabled="@(_compare.Count != 2)" @onclick="Compare">Сравнить (@_compare.Count/2)</button></div> }
+    @foreach (var run in _runs)
+    {
+        <div class="run-history-item" @key="run.Id">
+            <div class="run-row"><input type="checkbox" aria-label="@($"Сравнить {run.Id}")" checked="@_compare.Contains(run.Id)" @onchange="() => Toggle(run.Id)" /><a class="run-main" href="@($"/runs/{run.Id}")"><strong>@run.BenchmarkId.ToUpperInvariant() <span class="muted">· @run.Model</span></strong><small>@run.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm") · @run.CompletedCalls вызовов</small></a><span class="badge @run.Status.ToString().ToLowerInvariant()">@RunLabels.Status(run.Status)</span><button class="delete-run" disabled="@(run.Status is RunStatus.Running or RunStatus.Queued || _deleting)" title="@(run.Status is RunStatus.Running or RunStatus.Queued ? "Сначала остановите прогон" : "Удалить прогон и его файлы")" @onclick="() => _pendingDelete = run.Id">Удалить</button></div>
+            @if (_pendingDelete == run.Id)
+            {
+                <div class="delete-confirm" role="alert"><div><strong>Удалить этот прогон?</strong><p>Журнал и все результаты будут удалены безвозвратно. Другие прогоны останутся.</p></div><div class="actions"><button class="danger" disabled="@_deleting" @onclick="() => Delete(run.Id)">@(_deleting ? "Удаляем…" : "Удалить навсегда")</button><button class="secondary" disabled="@_deleting" @onclick="() => _pendingDelete = null">Оставить</button></div></div>
+            }
+        </div>
+    }
+</section>
+</div>
+@code {
+    private string _benchmark = "day1";
+    private string? _error;
+    private string? _pendingDelete;
+    private bool _deleting;
+    private IReadOnlyList<BenchmarkRun> _runs = [];
+    private readonly HashSet<string> _compare = [];
+    private BenchmarkDefinition Selected => Registry.Get(_benchmark).Definition;
+    protected override async Task OnInitializedAsync() { await Refresh(); }
+    private async Task Refresh() { try { _runs = await Store.ListAsync(); } catch (Exception e) { _error = e.Message; } }
+    private void OpenPreview() => Navigation.NavigateTo($"/experiments/{_benchmark}");
+    private void Toggle(string id) { if (!_compare.Remove(id) && _compare.Count < 2) _compare.Add(id); }
+    private async Task Delete(string id)
+    {
+        _deleting = true; _error = null;
+        try { await Queue.DeleteAsync(id); _compare.Remove(id); _pendingDelete = null; await Refresh(); }
+        catch (Exception e) { _error = e.Message; }
+        finally { _deleting = false; }
+    }
+    private void Compare() { var ids = _compare.ToArray(); Navigation.NavigateTo($"/compare/{ids[0]}/{ids[1]}"); }
+}

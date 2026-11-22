@@ -1,0 +1,6 @@
+<div class="readable-report">@((MarkupString)_html)</div>
+@code {
+    [Parameter] public string Text { get; set; } = "";
+    private string _source = "", _html = "";
+    protected override void OnParametersSet() { if (_source != Text) { _source = Text; _html = SafeReportMarkdown.Render(Text); } }
+}

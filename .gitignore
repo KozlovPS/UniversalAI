@@ -17,6 +17,11 @@
 mono_crash.*
 
 # Build results
+.local/
+appsettings.local.json
+*.db
+*.db-shm
+*.db-wal
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/

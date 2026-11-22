@@ -1,0 +1,9 @@
+{
+  "Snapshot": "2026-11-08",
+  "Source": "https://proxyapi.ru/models/browse",
+  "Models": [
+    { "Tier": "Бюджетная", "Model": "deepseek/deepseek-v4.1-flash", "Input": 26.07, "Output": 100.25 },
+    { "Tier": "Средняя", "Model": "openai/gpt-6-sol", "Input": 420, "Output": 2100 },
+    { "Tier": "Флагманская", "Model": "openai/gpt-6-astra", "Input": 1580, "Output": 7900 }
+  ]
+}
