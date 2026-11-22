@@ -1,6 +1,8 @@
 @page "/chat"
+@using Microsoft.JSInterop
 @rendermode InteractiveServer
-@implements IDisposable
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 @inject IWorkspaceClient Workspace
 
 <PageTitle>Диалоги — UniversalAI</PageTitle>
@@ -96,7 +98,7 @@
         @foreach (var message in _messages) { <article class="message @message.Role"><div class="message-role">@(message.Role == "user" ? "ВЫ" : message.Role == "assistant" ? "АССИСТЕНТ" : message.Role.ToUpperInvariant())</div><div class="message-content">@message.Content</div>@if (message.ToolCalls?.Count > 0) { <details><summary>Вызовы инструментов</summary><pre>@JsonSerializer.Serialize(message.ToolCalls, new JsonSerializerOptions { WriteIndented = true })</pre></details> }</article> }
         @if (_request != null) { <p class="muted">Ожидаем ответ модели…</p> }
     </section>
-    <section class="panel composer"><label class="sr-only" for="message">Сообщение</label><textarea id="message" @bind="_input" rows="3" placeholder="Введите сообщение…" disabled="@Unavailable"></textarea><div class="section-heading"><span class="muted">@_model</span>@if (_request != null) { <button class="secondary" @onclick="Cancel">Отменить ожидание</button> } else { <button disabled="@(Unavailable || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Отправить ↑</button> }</div></section>
+    <section class="panel composer"><label class="sr-only" for="message">Сообщение</label><textarea id="message" @ref="_composer" @bind="_input" @bind:event="oninput" rows="3" placeholder="Введите сообщение…" aria-describedby="composer-shortcuts" disabled="@Unavailable"></textarea><div id="composer-shortcuts" class="muted">Enter — отправить · Ctrl+Enter — новая строка</div><div class="section-heading"><span class="muted">@_model</span>@if (_request != null) { <button class="secondary" @onclick="Cancel">Отменить ожидание</button> } else { <button disabled="@(Unavailable || string.IsNullOrWhiteSpace(_input))" @onclick="Send">Отправить ↑</button> }</div></section>
     <section class="panel"><details><summary>Память диалога</summary><h3>Summary</h3><pre>@(_current.Summary ?? "Пока не создано")</pre><h3>Sticky Facts</h3><pre>@_current.FactsJson</pre></details></section>
     @if (_turn != null) { <section class="panel"><h2>Последний ход</h2><p>Токены API: @_turn.TokenUsage.PromptTokens вход / @_turn.TokenUsage.CompletionTokens выход. Циклы инструментов: @_turn.ToolRounds.</p>@if (_turn.Context != null) { <p class="muted">Оценка истории: @_turn.Context.RawHistoryTokens → @_turn.Context.EffectiveHistoryTokens токенов.</p> }@if (_turn.Context?.LayerTokens is { } layers) { <p>Оценка добавленных токенов по слоям: диалог @layers.ShortTerm / задача @layers.Working / долговременная @layers.LongTerm. Это локальная оценка с обрамлением сообщений, не тарифицируемый usage API.</p> }<details><summary>Трасса и статистика</summary><pre>@JsonSerializer.Serialize(_turn, new JsonSerializerOptions { WriteIndented = true })</pre></details></section> }
 }
@@ -210,7 +212,31 @@ else { <section class="panel empty"><span>◌</span><h2>Ваше простра�
         finally { _opening = false; }
     }
     private void RequestDelete(ConversationInfo conversation) { if (!Unavailable) { _error = null; _deleteTarget = conversation; _focusDelete = true; } }
-    protected override async Task OnAfterRenderAsync(bool firstRender) { if (_focusDelete) { _focusDelete = false; await _cancelDelete.FocusAsync(); } }
+    private ElementReference _composer;
+    private string? _boundComposerId;
+    private IJSObjectReference? _composerModule;
+    private DotNetObjectReference<Chat>? _composerReference;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusDelete) { _focusDelete = false; await _cancelDelete.FocusAsync(); }
+        if (_current != null && _boundComposerId != _composer.Id)
+        {
+            _composerModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./chat-composer.js");
+            _composerReference ??= DotNetObjectReference.Create(this);
+            await _composerModule.InvokeVoidAsync("attach", _composer, _composerReference);
+            _boundComposerId = _composer.Id;
+        }
+    }
+    [JSInvokable]
+    public async Task SendFromKeyboard(string value)
+    {
+        if (Unavailable || string.IsNullOrWhiteSpace(value)) return;
+        _input = value;
+        var pending = Send();
+        await InvokeAsync(StateHasChanged);
+        await pending;
+        await InvokeAsync(StateHasChanged);
+    }
     private async Task FocusConfirmDelete() => await _confirmDelete.FocusAsync();
     private async Task FocusCancelDelete() => await _cancelDelete.FocusAsync();
     private void DeleteKeyDown(KeyboardEventArgs e) { if (e.Key == "Escape" && !Unavailable) _deleteTarget = null; }
@@ -255,7 +281,7 @@ else { <section class="panel empty"><span>◌</span><h2>Ваше простра�
     private async Task Branch() { if (_current == null || Unavailable) return; _busy = true; try { var c = await Workspace.BranchAsync(_current.Id, _current.Title + " (ветка)"); _conversations = await Workspace.ListAsync(); await Open(c.Id); } catch (Exception e) { _error = e.Message; } finally { _busy = false; } }
     private async Task Send()
     {
-        if (_current == null || Unavailable) return; _busy = true; _error = null; _request = new();
+        if (_current == null || Unavailable || string.IsNullOrWhiteSpace(_input)) return; _busy = true; _error = null; _request = new();
         try { await SaveCore(); var turn = await Workspace.SendAsync(_current.Id, _input, _request.Token); _input = ""; await Open(_current.Id); _turn = turn; _conversations = await Workspace.ListAsync(); }
         catch (OperationCanceledException) { _error = "Ожидание отменено. Отправленный текст сохранён в поле ввода."; }
         catch (Exception e) { _error = e.Message; }
@@ -276,5 +302,12 @@ else { <section class="panel empty"><span>◌</span><h2>Ваше простра�
         finally { _busy = false; _request.Dispose(); _request = null; }
     }
     private void Cancel() => _request?.Cancel();
-    public void Dispose() => _request?.Cancel();
+    public async ValueTask DisposeAsync()
+    {
+        _request?.Cancel();
+        if (_composerModule != null)
+            try { await _composerModule.InvokeVoidAsync("detach", _composer); await _composerModule.DisposeAsync(); }
+            catch (JSDisconnectedException) { }
+        _composerReference?.Dispose();
+    }
 }

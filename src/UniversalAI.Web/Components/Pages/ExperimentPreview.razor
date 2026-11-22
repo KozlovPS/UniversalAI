@@ -94,7 +94,7 @@
             var run = await Queue.SubmitAsync(_definition.Id, new BenchmarkSettings { ProviderId = _provider,
                 Model = _definition.HasModel ? _model : null, HighEffort = string.IsNullOrWhiteSpace(_effort) ? null : _effort,
                 Keep = _keep, Batch = _batch, Generate = _generate, Branches = _branches, ContextWindowTokens = _contextWindow });
-            Navigation.NavigateTo($"/runs/{run.Id}");
+            Navigation.NavigateTo($"/runs/{run.Id}?recording=true");
         }
         catch (Exception e) { _error = e.Message; _busy = false; }
     }

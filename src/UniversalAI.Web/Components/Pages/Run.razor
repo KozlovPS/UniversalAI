@@ -11,7 +11,7 @@
 @if (_error != null && _run == null) { <p class="alert" role="alert">@_error</p> }
 @if (_run != null)
 {
-    <ExperimentScreen Run="_run" Data="_view" Log="@_log" Duration="@Duration" ArtifactCount="_artifacts.Count" UpdatedAt="_updatedAt" RefreshError="@_error" ShowMemory='@(_run.BenchmarkId == "day11")'>
+    <ExperimentScreen Run="_run" Data="_view" Log="@_log" Duration="@Duration" ArtifactCount="_artifacts.Count" UpdatedAt="_updatedAt" RefreshError="@_error" ShowMemory='@(_run.BenchmarkId == "day11")' StartRecording="Recording">
         <Actions>@if (_run.Status is RunStatus.Running or RunStatus.Queued) { <button class="screen-button" @onclick="Cancel">Остановить</button> }<button class="screen-button screen-refresh" @onclick="Refresh">Обновить</button></Actions>
         <LaunchAction>@if (_run.Status is not (RunStatus.Running or RunStatus.Queued)) { <a class="screen-button experiment-launch" href="@($"/experiments/{_run.BenchmarkId}?fromRun={_run.Id}")" title="Посмотреть задание и сценарий перед новым запуском">Запустить эксперимент</a> }</LaunchAction>
         <Memory>@if (_run.BenchmarkId == "day11") { <Day11Progress Report="_day11" /> } else { <p>Дополнительный разбор доступен в журнале и сохранённых отчётах.</p> }</Memory>
@@ -27,6 +27,7 @@
 }
 @code {
     [Parameter] public string Id { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "recording")] public bool Recording { get; set; }
     private BenchmarkRun? _run;
     private IReadOnlyList<string> _artifacts = [];
     private string _log = "", _previewName = "";

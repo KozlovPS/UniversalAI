@@ -82,6 +82,7 @@
     [Parameter] public RenderFragment? Lesson { get; set; }
     [Parameter] public RenderFragment? Scenario { get; set; }
     [Parameter] public bool ShowMemory { get; set; }
+    [Parameter] public bool StartRecording { get; set; }
     [Parameter] public RenderFragment? Results { get; set; }
     [Parameter] public RenderFragment? Settings { get; set; }
     [Parameter] public RenderFragment? Actions { get; set; }
@@ -101,7 +102,7 @@
     private string TabClass(string name) => _tab == name ? "is-selected" : "";
     protected override void OnParametersSet()
     {
-        if (_runId != Run.Id) { _runId = Run.Id; _tab = "log"; _search = ""; _source = ""; _lines.Clear(); _follow = true; _structured = true; _playback = new(); }
+        if (_runId != Run.Id) { _runId = Run.Id; _recording = StartRecording; _tab = "log"; _search = ""; _source = ""; _lines.Clear(); _follow = true; _structured = true; _playback = new(); }
         if (_source == Log) return;
         _source = Log;
         _lines = Log.Replace("\r\n", "\n").Split('\n').Select((text, index) => new Line(index + 1, text, Readable(text), Classify(text))).ToList();
