@@ -32,6 +32,8 @@ public static class ServiceRegistration
         services.AddSingleton<AgentToolRegistry>();
         services.AddScoped<IAgent, ToolCallingAgent>();
         services.AddScoped<IAgent, DirectChatAgent>();
+        services.AddScoped<TaskWorkflowAgent>();
+        services.AddScoped<IAgent>(sp => sp.GetRequiredService<TaskWorkflowAgent>());
         services.AddScoped<ChatService>();
         services.AddScoped<AgentRegistry>();
         services.AddSingleton<ConversationGate>();

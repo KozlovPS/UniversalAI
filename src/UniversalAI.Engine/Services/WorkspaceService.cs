@@ -23,7 +23,8 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
         return new(c.Id, c.Title, c.Model, c.AgentId, c.ProviderProfileId, c.MemoryStrategy,
             c.CompressionEnabled, c.ContextKeepLastMessages, c.ContextCompressionBatchSize,
             c.Temperature, c.MaxTokens, c.SystemPrompt, c.UpdatedAt, c.FactsJson, summary?.Content,
-            c.TopP, c.FrequencyPenalty, c.PresencePenalty, c.Seed, c.ReasoningEffort, c.ReasoningBudgetTokens, c.WorkingMemoryJson, c.UserProfileJson);
+            c.TopP, c.FrequencyPenalty, c.PresencePenalty, c.Seed, c.ReasoningEffort, c.ReasoningBudgetTokens, c.WorkingMemoryJson, c.UserProfileJson,
+            Tasks.TaskStateMachine.Parse(c.TaskStateJson));
     }
 
     public Task<IReadOnlyList<ProviderInfo>> ProvidersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProviderInfo>>(
@@ -165,6 +166,8 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
         {
             var c = await sp.GetRequiredService<ConversationService>().GetConversationAsync(id)
                 ?? throw new KeyNotFoundException("Диалог не найден.");
+            if (c.TaskStateJson != "null" || content.StartsWith("/task ", StringComparison.OrdinalIgnoreCase))
+                return await sp.GetRequiredService<TaskWorkflowAgent>().RunAsync(id, content, ct);
             return await sp.GetRequiredService<AgentRegistry>().Get(c.AgentId).RunAsync(id, content, ct);
         });
     }

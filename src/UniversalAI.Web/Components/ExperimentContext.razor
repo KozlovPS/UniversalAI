@@ -37,7 +37,7 @@
 @if (Call is { } call)
 {
     <section class="inspector-section">
-        <div class="inspector-section-title"><span>КОНТЕКСТ ЗАПРОСА #@call.Number</span><span>@(call.Kind == "memory" ? "Память" : "Ответ")</span></div>
+        <div class="inspector-section-title"><span>КОНТЕКСТ ЗАПРОСА #@call.Number</span><span>@(call.Kind == "task-intent" ? "Выбор действия, проверяемый кодом" : call.Kind == "memory" ? "Память" : "Ответ")</span></div>
         @if (Archive is { } archive)
         {
             var comparison = Compare(archive, ContextMessages);
@@ -60,6 +60,8 @@
             <p class="inspector-note">Модель: @call.Request.Model · temperature: @(call.Request.Temperature?.ToString() ?? "Н/д") · max tokens: @(call.Request.MaxTokens?.ToString() ?? "Н/д")</p>
         </details>
         @if (call.Kind == "memory" && call.Response != null) { <div class="memory-result"><span>Результат обработки памяти</span><p>@call.Response.Content</p></div> }
+        @if (call.Kind == "task-intent" && call.Response != null)
+        { <div class="memory-result"><span>Предложение модели, не подтверждённый переход</span><p>@string.Join("; ", call.Response.ToolCalls.Select(t => t.Function.Name + ": " + t.Function.Arguments))</p></div> }
         @if (call.Error != null) { <p class="evidence-notice" role="status">@call.Error</p> }
     </section>
 }

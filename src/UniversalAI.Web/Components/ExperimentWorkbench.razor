@@ -44,7 +44,7 @@
                         <div class="speech speech-user"><span class="speaker-avatar">В</span><div><span class="speaker-label">Вопрос / вход</span><div class="speech-text">@Question(call)</div></div></div>
                         @if (Playback.AnswerVisible(call))
                         {
-                            <div class="speech speech-assistant reveal-enter"><span class="speaker-avatar">AI</span><div><span class="speaker-label">Модель</span><div class="speech-text">@(call.Response?.Content ?? call.Error ?? (Active ? "Ожидание ответа…" : "Ответ не сохранён · прогон остановлен или прерван"))</div></div></div>
+                            <div class="speech speech-assistant reveal-enter"><span class="speaker-avatar">AI</span><div><span class="speaker-label">@(call.Kind == "task-intent" ? "Предложение действия, переход проверяет код" : "Модель")</span><div class="speech-text">@(call.Kind == "task-intent" && call.Response?.ToolCalls.Count > 0 ? string.Join("; ", call.Response.ToolCalls.Select(t => t.Function.Arguments)) : call.Response?.Content ?? call.Error ?? (Active ? "Ожидание ответа…" : "Ответ не сохранён · прогон остановлен или прерван"))</div></div></div>
                         }
                         else
                         {

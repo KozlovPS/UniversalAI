@@ -61,6 +61,14 @@ public sealed class HelpCommandHandler : IConsoleCommandHandler
               /reasoning_budget 4096  Установить бюджет reasoning-токенов
 
             ДОПОЛНИТЕЛЬНО:
+              /task start ЦЕЛЬ        Создать задачу с конечным автоматом
+              /task plan              Подготовить план
+              /task approve           Явно утвердить сохранённый план
+              /task execute           Реализация утверждённого плана
+              /task validate          Проверка сохранённого результата
+              /task finish            Финал после выполненной валидации
+              /task pause|resume      Пауза / продолжение без потери шага
+              /task status|clear      Состояние / закрыть завершённую задачу
               /compression            Показать настройки сжатия истории
               /compression on|off     Включить сжатие / отправлять полную историю
               /compression keep 6     Минимум последних исходных сообщений

@@ -135,6 +135,9 @@ public class ConversationService : IContextMemoryStore
             }
         }
 
+        if (preparedContext?.PendingTaskState is { } taskState)
+            conversation.TaskStateJson = JsonSerializer.Serialize(taskState);
+        if (preparedContext?.ClearTaskState == true) conversation.TaskStateJson = "null";
         await _db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
@@ -206,6 +209,7 @@ public class ConversationService : IContextMemoryStore
         conversation.FactsJson = "{}";
         conversation.WorkingMemoryJson = "{}";
         conversation.UserProfileJson = "{}";
+        conversation.TaskStateJson = "null";
         conversation.ProfilePromptTokens = conversation.ProfileCompletionTokens = 0;
         conversation.ProfileUsageComplete = true;
         conversation.FactsPromptTokens = conversation.FactsCompletionTokens = 0;

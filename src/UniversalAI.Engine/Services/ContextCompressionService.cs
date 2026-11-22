@@ -21,6 +21,8 @@ public sealed record PreparedContext(
     public ChatResult? ProfileCall { get; init; }
     public int ProfileTokens { get; init; }
     public string? ProfileResponseNotice { get; init; }
+    public Tasks.TaskWorkflowState? PendingTaskState { get; init; }
+    public bool ClearTaskState { get; init; }
 }
 
 /// <summary>Builds model context without deleting the original conversation log.</summary>

@@ -30,6 +30,7 @@
         <div><button class="secondary" disabled="@Unavailable" @onclick="Save">Сохранить настройки</button></div>
     </section>
     </details>
+    <TaskStatePanel @key="_current.Id" State="_current.TaskState" Busy="Unavailable" Command="TaskCommand" />
     <section class="panel stack">
         <h2>Профиль пользователя</h2>
         <p class="muted">Профиль действует в этом диалоге при любой стратегии памяти. Укажите имя для включения. Ветка получает независимую копию. Очистка истории сохраняет профиль, полный сброс удаляет его.</p>
@@ -189,6 +190,20 @@ else { <section class="panel empty"><span>◌</span><h2>Ваше простра�
         if (_current == null || Unavailable) return; _busy = true; _error = null; _request = new();
         try { await SaveCore(); var turn = await Workspace.SendAsync(_current.Id, _input, _request.Token); _input = ""; await Open(_current.Id); _turn = turn; _conversations = await Workspace.ListAsync(); }
         catch (OperationCanceledException) { _error = "Ожидание отменено. Отправленный текст сохранён в поле ввода."; }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; _request.Dispose(); _request = null; }
+    }
+    private async Task TaskCommand(string command)
+    {
+        if (_current == null || Unavailable) return;
+        _busy = true; _error = null; _request = new();
+        try
+        {
+            await SaveCore();
+            var turn = await Workspace.SendAsync(_current.Id, command, _request.Token);
+            await Open(_current.Id); _turn = turn; _conversations = await Workspace.ListAsync();
+        }
+        catch (OperationCanceledException) { _error = "Действие задачи отменено. Сохранённое состояние доступно после обновления."; }
         catch (Exception e) { _error = e.Message; }
         finally { _busy = false; _request.Dispose(); _request = null; }
     }

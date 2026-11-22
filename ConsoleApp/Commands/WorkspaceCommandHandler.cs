@@ -20,6 +20,9 @@ public sealed class WorkspaceCommandHandler(IWorkspaceClient workspace) : IConso
             ConversationSettings? update = null;
             switch (command)
             {
+                case "/task":
+                    var taskTurn = await workspace.SendAsync(id, "/task " + (value.Length == 0 ? "status" : value), cancellationToken);
+                    Console.WriteLine(taskTurn.Response.Content); return true;
                 case "/new":
                     if (value.Length == 0 && !Console.IsInputRedirected) { Console.Write("Название (Enter — по умолчанию): "); value = Console.ReadLine() ?? ""; }
                     var created = await workspace.CreateAsync(new(value), cancellationToken);

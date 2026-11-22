@@ -30,6 +30,17 @@ if (args.FirstOrDefault() == "--serve-fake")
         string last = body.RootElement.GetProperty("messages").EnumerateArray().Last().GetProperty("content").GetString() ?? "";
         var messages = body.RootElement.GetProperty("messages").EnumerateArray().Select(m => new ChatMessage
             { Role = m.GetProperty("role").GetString()!, Content = m.GetProperty("content").GetString() ?? "" }).ToList();
+        bool taskIntent = body.RootElement.TryGetProperty("tools", out var definitions) && definitions.ValueKind == JsonValueKind.Array &&
+            definitions.EnumerateArray().Any(t => t.GetProperty("function").GetProperty("name").GetString() == "request_task_action");
+        if (taskIntent || messages.Any(m => m.Content.Contains("Ты ассистент с конечным автоматом задачи.")))
+        {
+            var result = Day13Checks.TaskProvider.Respond(new ChatRequest { Messages = messages,
+                Tools = taskIntent ? [UniversalAI.Services.Tasks.TaskWorkflow.IntentTool()] : [] });
+            var message = new Dictionary<string, object?> { ["role"] = "assistant", ["content"] = result.Content };
+            if (result.ToolCalls.Count > 0) message["tool_calls"] = result.ToolCalls;
+            return Results.Json(new { choices = new[] { new { message, finish_reason = result.FinishReason } },
+                usage = new { prompt_tokens = result.PromptTokens, completion_tokens = result.CompletionTokens, total_tokens = result.TotalTokens } });
+        }
         if (messages.Any(m => m.Content == UniversalAI.Services.Context.UserProfileMemory.Instructions || m.Content.StartsWith("ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ")))
         {
             var result = Day12Checks.ProfileProvider.Respond(new ChatRequest { Messages = messages });
@@ -208,6 +219,7 @@ Check((await workspace.ListAsync()).Count == 0 && (await store.ListAsync()).Coun
 
 await Day11Checks.RunAsync(root);
 await Day12Checks.RunAsync(root);
+await Day13Checks.RunAsync(root);
 await ExperimentPresentationChecks.RunAsync(root);
 Console.WriteLine($"Все проверки приложения пройдены. Артефакты: {root}");
 

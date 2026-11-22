@@ -11,6 +11,7 @@ public sealed class ExperimentDocuments
     public bool? ReportComplete { get; private set; }
     public string? ReportText { get; private set; }
     public string? ReportFile { get; private set; }
+    public ExperimentConclusion Conclusion { get; private set; } = ExperimentConclusion.Empty;
     public List<Outcome> Outcomes { get; } = [];
     public List<string> Notices { get; } = [];
     private static JsonElement Value(JsonElement item, string name) => item.ValueKind == JsonValueKind.Object
@@ -75,10 +76,22 @@ public sealed class ExperimentDocuments
                     group.Count(o => o.Assessment.Passed), group.Count(),
                     $"Объём: {group.Count(o => o.Assessment.LengthPassed)}/{group.Count()} · Код: {group.Count(o => o.Assessment.CodePassed)}/{group.Count()} · Тон: {group.Count(o => o.Assessment.TonePassed)}/{group.Count()}"));
         }
+        if (view.TaskWorkflow is { } workflow)
+        {
+            doc.ReportComplete = workflow.Completed;
+            foreach (var group in workflow.Observations.GroupBy(o => o.Group))
+                doc.Outcomes.Add(new(group.Key, group.Count(o => o.Passed), group.Count(),
+                    $"Выбор действия моделью: {group.Count(o => !o.Input.StartsWith("/task ") && o.IntentMatched)}/{group.Count(o => !o.Input.StartsWith("/task "))} · Отказов: {group.Count(o => !o.Turn.Allowed)} · Состояние после отказов сохранено: {group.All(o => o.StatePreservedOnDenial)}"));
+        }
         foreach (var result in Array(report, "Results"))
+        {
             if (Number(result, "CorrectTasks") is { } passed && Number(result, "TaskCount") is { } total)
                 doc.Outcomes.Add(new(Text(result, "ModelId") is { Length: > 0 } model ? model : $"{Text(result, "StrategyLabel")} · {Text(result, "ReasoningLabel")}", passed, total,
                     $"Ошибок запросов в отчёте: {Number(result, "FailedTasks")?.ToString() ?? "Н/д"}"));
+            if (run.BenchmarkId == "day4" && Number(result, "CorrectCount") is { } correct && Number(report, "Repetitions") is { } repetitions)
+                doc.Outcomes.Add(new($"temperature={Value(result, "Temperature")} · {Text(result, "TaskLabel")}", correct, repetitions,
+                    $"Ошибок API: {Number(result, "FailedCalls")?.ToString() ?? "Н/д"} · Сбоев формата: {Number(result, "FormatFailures")?.ToString() ?? "Н/д"}"));
+        }
         foreach (var strategy in Array(report, "Strategies"))
         {
             foreach (string section in new[] { "Answers", "Branches" })
@@ -124,6 +137,7 @@ public sealed class ExperimentDocuments
                 .Where(m => m != null).DistinctBy(m => m!.Content).Select((m, i) => new ExperimentMaterialItem($"Вход {i + 1}", m!.Content)).ToList()));
         if (view.Calls.FirstOrDefault()?.Request.Messages.FirstOrDefault(m => m.Role == "system") is { } rule)
             doc.Materials.Groups.Add(new("Правило ответа", "Системная инструкция из первого сохранённого запроса.", [new("system", rule.Content)]));
+        doc.Conclusion = ExperimentConclusion.Create(run.BenchmarkId, view, doc.Outcomes);
         return doc;
     }
 }

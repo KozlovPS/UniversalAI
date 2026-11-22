@@ -114,6 +114,8 @@ public sealed class BenchmarkRunner(BenchmarkRegistry registry, FileRunStore sto
             string kind = request.Messages.FirstOrDefault()?.Content is { } prompt &&
                 (prompt.StartsWith("Сожми историю", StringComparison.Ordinal) || prompt == UniversalAI.Services.Context.StickyFactsMemory.Instructions || prompt == UniversalAI.Services.Context.UserProfileMemory.Instructions)
                 ? "memory" : "answer";
+            if (request.Messages.FirstOrDefault()?.Content.StartsWith(UniversalAI.Services.Tasks.TaskWorkflow.IntentInstructions, StringComparison.Ordinal) == true)
+                kind = "task-intent";
             await File.AppendAllTextAsync(Path.Combine(directory, "api-requests.jsonl"),
                 JsonSerializer.Serialize(new { number, kind, request }) + "\n", linked.Token);
             ChatResult? response = null; string? error = null;
@@ -142,6 +144,8 @@ public static class BenchmarkRegistration
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day10", "Стратегии памяти", "Окно, facts, summary и независимые ветки", true, HasMemory: true, HasBranches: true), Day10ContextBenchmark.ExecuteAsync));
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day11", "Слои памяти", "Диалог, задача и долговременные facts: состав промпта, токены и пошаговая очистка", true, ScenarioVersion: Day11MemoryLayersBenchmark.ScenarioVersion), Day11MemoryLayersBenchmark.ExecuteAsync));
         services.AddSingleton<BenchmarkRegistry>();
+        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day13", "Состояние задачи", "Конечный автомат, утверждение плана, паузы, продолжение и запреты переходов", true,
+            ScenarioVersion: Day13TaskStateBenchmark.ScenarioVersion, ScorerVersion: Day13TaskStateBenchmark.ScorerVersion), Day13TaskStateBenchmark.ExecuteAsync));
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day12", "Персонализация", "Три противоположных профиля, пополнение из диалога и устойчивость на 10 вопросах", true, ScenarioVersion: Day12PersonalizationBenchmark.ScenarioVersion, ScorerVersion: Day12PersonalizationBenchmark.ScorerVersion), Day12PersonalizationBenchmark.ExecuteAsync));
         services.AddSingleton<FileRunStore>();
         services.AddSingleton<BenchmarkRunner>();

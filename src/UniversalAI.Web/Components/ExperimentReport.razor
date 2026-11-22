@@ -1,4 +1,12 @@
 <div class="experiment-document final-report">
+    <section class="report-conclusion @(!Complete ? "is-provisional" : "")" aria-label="Общий вывод эксперимента">
+        <div class="document-kicker">ГЛАВНОЕ ОБ ЭКСПЕРИМЕНТЕ</div>
+        <h2>@(Complete ? "Итоговый вывод" : "Предварительный вывод")</h2>
+        @if (!Complete) { <p class="conclusion-status">@(Active ? "Эксперимент продолжается. Вывод основан только на уже сохранённых проверках." : "Прогон завершён не полностью. Общий результат эксперимента пока не подтверждён.")</p> }
+        <p class="conclusion-finding">@Documents.Conclusion.Finding</p>
+        <p class="conclusion-evidence">@Documents.Conclusion.Evidence</p>
+        <p class="conclusion-scope">@Documents.Conclusion.Scope</p>
+    </section>
     <header class="document-heading"><div><div class="document-kicker">@Run.BenchmarkId.ToUpperInvariant() · РЕЗУЛЬТАТЫ ЭКСПЕРИМЕНТА</div><h2>@ReportTitle</h2><p>@Documents.Materials.Title · @Run.Model</p></div><span class="report-seal @(Complete ? "is-complete" : "is-partial")">@(Complete ? "✓ Протокол завершён" : Active ? "◌ Обновляется" : "! Частичные результаты")</span></header>
     @if (!Complete) { <div class="document-note">@(Active ? "Эксперимент продолжается. Ниже — уже сохранённые результаты; окончательные выводы появятся после завершения." : "Прогон не завершён полностью. Показаны сохранённые оценки и измерения, без подмены их полным результатом.")</div> }
     <div class="report-kpis">
