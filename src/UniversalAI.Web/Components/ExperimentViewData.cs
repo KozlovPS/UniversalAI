@@ -19,6 +19,7 @@ public sealed class ExperimentViewData
     public Day13TaskStateBenchmark.Report? TaskWorkflow { get; private set; }
     public Day14InvariantsBenchmark.Report? Invariants { get; private set; }
     public Day15MemoryUpdatesBenchmark.Report? MemoryUpdates { get; private set; }
+    public FoundationBenchmarks.Report? Foundation { get; private set; }
     public ExperimentPresentation? Presentation { get; private set; }
     public List<string> Notices { get; } = [];
     private static readonly JsonSerializerOptions Json = new(FileRunStore.Json);
@@ -69,6 +70,8 @@ public sealed class ExperimentViewData
             view.Invariants = await Read<Day14InvariantsBenchmark.Report>("report.json");
         if (run.BenchmarkId == "day15")
             view.MemoryUpdates = await Read<Day15MemoryUpdatesBenchmark.Report>("report.json");
+        if (run.BenchmarkId is "day1" or "day2" or "day6" or "day7" or "day8")
+            view.Foundation = await Read<FoundationBenchmarks.Report>("report.json");
 
         if (run.BenchmarkId == "day10")
         {
@@ -108,6 +111,7 @@ public sealed class ExperimentViewData
                 var task = view.TaskWorkflow?.Observations.FirstOrDefault(o => o.CallNumbers.Contains(request.Number));
                 var invariant = view.Invariants?.Observations.Where(o => o.Turn.Request != null).ElementAtOrDefault(request.Number - 1);
                 var memoryUpdate = view.MemoryUpdates?.Observations.FirstOrDefault(o => o.CallNumber == request.Number);
+                var foundation = view.Foundation?.Observations.FirstOrDefault(o => o.CallNumbers.Contains(request.Number));
                 // Day-11 has exactly six independent probes per saved stage; no memory API calls.
                 var stage = run.BenchmarkId == "day11"
                     ? view.Layers?.Snapshots.ElementAtOrDefault((request.Number - 1) / 6)?.Stage ?? "execution"
@@ -118,8 +122,8 @@ public sealed class ExperimentViewData
                 view.Calls.Add(new(request.Number, stage, request.Kind, request.Request, response?.Response,
                     response?.Error, response?.Milliseconds / 1000.0, observation?.Expected ?? (preference == null ? null :
                         $"Объём: {preference.ExpectedProfile.Length}; код: {preference.ExpectedProfile.Code}; тон: {preference.ExpectedProfile.Tone}") ??
-                        (task == null ? null : $"Разрешено={task.ExpectedAllowed}; этап={task.ExpectedStage}; пауза={task.ExpectedPaused}") ?? invariant?.Expected ?? memoryUpdate?.Expected,
-                        observation?.Passed ?? preference?.Assessment.Passed ?? task?.Passed ?? invariant?.Passed ?? memoryUpdate?.Passed));
+                        (task == null ? null : $"Разрешено={task.ExpectedAllowed}; этап={task.ExpectedStage}; пауза={task.ExpectedPaused}") ?? invariant?.Expected ?? memoryUpdate?.Expected ?? foundation?.Expected,
+                        observation?.Passed ?? preference?.Assessment.Passed ?? task?.Passed ?? invariant?.Passed ?? memoryUpdate?.Passed ?? foundation?.Passed));
             }
             if (view.Layers != null)
                 foreach (var snapshot in view.Layers.Snapshots)

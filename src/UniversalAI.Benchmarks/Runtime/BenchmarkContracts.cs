@@ -12,6 +12,7 @@ public sealed record BenchmarkSettings
     public bool Generate { get; init; }
     public bool Branches { get; init; } = true;
     public string? TranscriptPath { get; init; }
+    public int ContextWindowTokens { get; init; } = 128000;
 }
 
 public sealed record BenchmarkDefinition(string Id, string Name, string Description, bool HasModel,
@@ -27,7 +28,9 @@ public interface IBenchmark
 public sealed class BenchmarkRegistry(IEnumerable<IBenchmark> benchmarks)
 {
     private readonly Dictionary<string, IBenchmark> _benchmarks = benchmarks.ToDictionary(b => b.Definition.Id, StringComparer.OrdinalIgnoreCase);
-    public IReadOnlyList<BenchmarkDefinition> List() => _benchmarks.Values.Select(b => b.Definition).ToList();
+    public IReadOnlyList<BenchmarkDefinition> List() => _benchmarks.Values.Select(b => b.Definition)
+        .OrderBy(b => b.Id.StartsWith("day", StringComparison.OrdinalIgnoreCase) && int.TryParse(b.Id.AsSpan(3), out int n) ? n : int.MaxValue)
+        .ThenBy(b => b.Id, StringComparer.OrdinalIgnoreCase).ToList();
     public IBenchmark Get(string id) => _benchmarks.GetValueOrDefault(id)
         ?? throw new ArgumentException($"Неизвестный эксперимент '{id}'.");
 }

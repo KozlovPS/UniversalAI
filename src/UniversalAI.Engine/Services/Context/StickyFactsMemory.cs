@@ -25,7 +25,7 @@ public static class StickyFactsMemory
     {
         var response = await provider.SendMessageAsync(new ChatRequest
         {
-            Model = model, Temperature = 0, MaxTokens = 2400,
+            Model = model, Temperature = 0,
             Messages =
             [
                 new() { Role = "system", Content = Instructions },

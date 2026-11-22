@@ -32,6 +32,7 @@ public static class BenchmarkConsoleRunner
                 case "--high-effort": settings = settings with { HighEffort = value }; break;
                 case "--keep": settings = settings with { Keep = int.Parse(value) }; break;
                 case "--batch": settings = settings with { Batch = int.Parse(value) }; break;
+                case "--context-window": settings = settings with { ContextWindowTokens = int.Parse(value) }; break;
                 case "--transcript": settings = settings with { TranscriptPath = Path.GetFullPath(value) }; break;
                 case "--output": output = Path.GetFullPath(value); break;
                 case "--base-url": baseUrl = value; break;

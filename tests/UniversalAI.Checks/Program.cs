@@ -32,6 +32,19 @@ if (args.FirstOrDefault() == "--serve-fake")
         string last = body.RootElement.GetProperty("messages").EnumerateArray().Last().GetProperty("content").GetString() ?? "";
         var messages = body.RootElement.GetProperty("messages").EnumerateArray().Select(m => new ChatMessage
             { Role = m.GetProperty("role").GetString()!, Content = m.GetProperty("content").GetString() ?? "" }).ToList();
+        bool foundationTools = body.RootElement.TryGetProperty("tools", out var toolDefs) && toolDefs.ValueKind == JsonValueKind.Array &&
+            toolDefs.EnumerateArray().Any(t => t.GetProperty("function").GetProperty("name").GetString() == "calculate");
+        if (foundationTools || last == FoundationBenchmarks.FormatQuestion || last.Contains("2 + 2") || last.Contains("2+2") || last.StartsWith("Шаг ") || last.StartsWith("x x x "))
+        {
+            if (last.StartsWith("x x x ")) return Results.BadRequest(new { error = new { message = "maximum context length exceeded" } });
+            var req = new ChatRequest { Model = "fake-local", Messages = messages, Tools = foundationTools ? new UniversalAI.Services.Agents.AgentToolRegistry().Definitions.ToList() : [] };
+            if (body.RootElement.TryGetProperty("max_tokens", out var limit)) req.MaxTokens = limit.GetInt32();
+            var result = CourseChecks.FoundationProvider.Respond(req);
+            var reply = new Dictionary<string, object?> { ["role"] = "assistant", ["content"] = result.Content };
+            if (result.ToolCalls.Count > 0) reply["tool_calls"] = result.ToolCalls;
+            return Results.Json(new { choices = new[] { new { message = reply, finish_reason = result.FinishReason } },
+                usage = new { prompt_tokens = result.PromptTokens, completion_tokens = result.CompletionTokens, total_tokens = result.TotalTokens } });
+        }
         if (messages[0].Content == UniversalAI.Services.Context.EvolvingMemory.Instructions)
         {
             return Results.Json(new { choices = new[] { new { message = new { role = "assistant", content = Day15Checks.MemoryProvider.Respond(messages) }, finish_reason = "stop" } },
@@ -235,6 +248,7 @@ await Day12Checks.RunAsync(root);
 await Day13Checks.RunAsync(root);
 await Day14Checks.RunAsync(root);
 await Day15Checks.RunAsync(root);
+await CourseChecks.RunAsync(root);
 await ConversationModuleChecks.RunAsync(root);
 await SnapshotFileChecks.RunAsync(root);
 await ExperimentPresentationChecks.RunAsync(root);

@@ -140,12 +140,12 @@ static class ExperimentPresentationChecks
         Check(docs.Materials.Groups.SelectMany(g => g.Items).Any(i => i.Text == "Сохранённая задача этого прогона" && i.Expected == "17") &&
             !docs.Materials.Groups.SelectMany(g => g.Items).Any(i => i.Text.Contains("48 / 6")),
             "Сценарий старого Day-5 берёт задачи из его отчёта, а не из нового набора кода");
-        Check(docs.Materials.Assignment == null && docs.Outcomes.Single().Passed == 1 && docs.Outcomes.Single().Total == 2,
-            "Задание дней 1–10 не выдумывается; сохранённые оценки не пересчитываются");
+        Check(docs.Materials.Assignment == CourseAssignments.Find("day5")!.Text && docs.Outcomes.Single().Passed == 1 && docs.Outcomes.Single().Total == 2,
+            "Полный исходник DAYS.md показан без подмены сохранённых оценок");
         async Task<string> Render<T>(Dictionary<string, object?> values) where T : IComponent =>
             WebUtility.HtmlDecode(await renderer.Dispatcher.InvokeAsync(async () => (await renderer.RenderComponentAsync<T>(ParameterView.FromDictionary(values))).ToHtmlString()));
         string lesson = await Render<ExperimentLesson>(new() { ["Documents"] = docs, ["BenchmarkId"] = "day5" });
-        Check(lesson.Contains("Исходное задание пока не добавлено"), "Незаполненное задание дня имеет явную пометку");
+        Check(lesson.Contains("День 5. Версии моделей") && lesson.Contains("В этом архиве нет отдельного снимка задания"), "Актуальное полное задание для старого архива имеет честную пометку источника");
         string report = await Render<ExperimentReport>(new() { ["Run"] = run, ["Documents"] = docs });
         Check(report.Contains("Частичный отчёт") && !report.Contains("✓ Протокол завершён"), "Незавершённый запуск получает частичный отчёт");
         string safe = SafeReportMarkdown.Render(markdown);
@@ -156,9 +156,12 @@ static class ExperimentPresentationChecks
         docs = await Read(definition);
         Check(docs.HasSavedMaterials && docs.Materials.Title == "Название из снимка" && docs.Materials.Groups[0].Items[0].Text == "АРХИВ-777",
             "Сохранённый снимок задания и материалов имеет приоритет над текущим каталогом");
+        string currentLesson = await Render<ExperimentLesson>(new() { ["Documents"] = docs, ["BenchmarkId"] = "day5" });
+        Check(currentLesson.Contains("День 5. Версии моделей") && currentLesson.Contains("полный актуальный текст DAYS.md") &&
+            docs.Materials.Assignment == "Сохранённое задание", "Старая запись показывает полный текущий источник с пометкой, исходный snapshot не изменяется");
         await File.WriteAllTextAsync(Path.Combine(directory, "experiment-materials.json"), JsonSerializer.Serialize(frozen with { SchemaVersion = 99 }));
         docs = await Read(definition);
-        Check(!docs.HasSavedMaterials && docs.Notices.Count > 0 && docs.Materials.Assignment == null,
+        Check(!docs.HasSavedMaterials && docs.Notices.Count > 0 && docs.Materials.Assignment == CourseAssignments.Find("day5")!.Text,
             "Неизвестная версия материалов оставляет доступ к реальным артефактам");
         run = run with { BenchmarkId = "day11" };
         await store.SaveAsync(run);

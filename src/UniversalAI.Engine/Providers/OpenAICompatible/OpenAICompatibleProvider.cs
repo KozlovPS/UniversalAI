@@ -25,7 +25,8 @@ public class OpenAICompatibleProvider : IAIProvider
         SupportsSeed = true,
         SupportsReasoningEffort = true,
         SupportsReasoningBudgetTokens = false,
-        SupportsJsonSchema = false,
+        SupportsJsonSchema = true,
+        SupportsStopSequence = true,
         SupportsStreaming = false,
         SupportsFunctionCalling = _options.SupportsTools
     };
@@ -116,16 +117,15 @@ public class OpenAICompatibleProvider : IAIProvider
             },
             capabilities);
 
-        if (request.ResponseFormat.HasValue)
-        {
-            throw new NotSupportedException(
-                "JSON Schema пока не реализован для этого провайдера.");
-        }
+        if (request.Stop is { Count: > 4 } || request.Stop?.Any(string.IsNullOrEmpty) == true)
+            throw new ArgumentException("Stop: от одной до четырёх непустых последовательностей.");
 
         OpenAICompatibleRequest body = new()
         {
             Model = model,
             Messages = request.Messages.Select(ToOpenAIMessage).ToList(),
+            ResponseFormat = request.ResponseFormat,
+            Stop = request.Stop is { Count: > 0 } ? request.Stop : null,
             Tools = request.Tools.Count == 0
                 ? null
                 : request.Tools.Select(tool => new OpenAICompatibleTool
@@ -375,6 +375,10 @@ public class OpenAICompatibleProvider : IAIProvider
 
         [JsonPropertyName("max_tokens")]
         public int? MaxTokens { get; set; }
+        [JsonPropertyName("response_format")]
+        public JsonElement? ResponseFormat { get; set; }
+        [JsonPropertyName("stop")]
+        public List<string>? Stop { get; set; }
 
         [JsonPropertyName("max_completion_tokens")]
         public int? MaxCompletionTokens { get; set; }

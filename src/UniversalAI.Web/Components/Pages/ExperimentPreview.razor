@@ -15,6 +15,11 @@
     <div class="experiment-layout experiment-preparation">
         <section class="panel stack">
             <h2>Запуск эксперимента</h2>
+            @if (_definition.Id == "day8")
+            {
+                <label>Окно контекста выбранной модели, токенов<input type="number" min="1024" max="2000000" @bind="_contextWindow" disabled="@_busy" /></label>
+                <p class="muted">Укажите реальное окно выбранной модели. Эксперимент отправит вход длиннее этого окна и покажет фактическую ошибку провайдера. Это размер входного сценария; лимит ответа не задаётся.</p>
+            }
             <p class="callout">Просмотр задания и сценария бесплатный: обращений к модели нет. Запуск начнётся только по кнопке ниже.</p>
             @if (FromRun != null) { <p class="muted">Настройки скопированы из выбранного прогона. Будет создан новый запуск.</p> }
             <label>Подключение<select @bind="_provider" @bind:after="SelectProvider" disabled="@_busy">@foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }</select></label>
@@ -47,7 +52,7 @@
     private ExperimentDocuments _documents = new();
     private IReadOnlyList<ProviderInfo> _providers = [];
     private string _provider = "", _model = "", _effort = "", _tab = "lesson";
-    private int _keep = 6, _batch = 10;
+    private int _keep = 6, _batch = 10, _contextWindow = 128000;
     private bool _generate, _branches = true, _busy;
     private string? _error;
     protected override async Task OnParametersSetAsync()
@@ -60,6 +65,7 @@
             _providers = (await Workspace.ProvidersAsync()).Where(p => p.Type == "OpenAICompatible").ToList();
             _provider = _providers.FirstOrDefault(p => p.Id == "proxyapi")?.Id ?? _providers.FirstOrDefault()?.Id ?? "";
             _effort = ""; _keep = 6; _batch = 10; _generate = false; _branches = true;
+            _contextWindow = 128000;
             SelectProvider();
             if (FromRun != null)
             {
@@ -69,6 +75,7 @@
                 var s = source.Settings;
                 _provider = s.ProviderId; _model = s.Model ?? source.Model; _effort = s.HighEffort ?? "";
                 _keep = s.Keep; _batch = s.Batch; _generate = s.Generate; _branches = s.Branches;
+                _contextWindow = s.ContextWindowTokens;
             }
         }
         catch (Exception e) { _definition = null; _error = e.Message; }
@@ -76,7 +83,7 @@
     private void SelectProvider()
     {
         _model = _providers.FirstOrDefault(p => p.Id == _provider)?.DefaultModel ?? "";
-        if (_provider == "proxyapi" && _definition?.Id is "day9" or "day10") _model = "openai/gpt-4o-mini";
+        if (_provider == "proxyapi" && _definition?.Id is "day2" or "day4" or "day8" or "day9" or "day10") _model = "openai/gpt-4o-mini";
     }
     private async Task Submit()
     {
@@ -86,7 +93,7 @@
         {
             var run = await Queue.SubmitAsync(_definition.Id, new BenchmarkSettings { ProviderId = _provider,
                 Model = _definition.HasModel ? _model : null, HighEffort = string.IsNullOrWhiteSpace(_effort) ? null : _effort,
-                Keep = _keep, Batch = _batch, Generate = _generate, Branches = _branches });
+                Keep = _keep, Batch = _batch, Generate = _generate, Branches = _branches, ContextWindowTokens = _contextWindow });
             Navigation.NavigateTo($"/runs/{run.Id}");
         }
         catch (Exception e) { _error = e.Message; _busy = false; }

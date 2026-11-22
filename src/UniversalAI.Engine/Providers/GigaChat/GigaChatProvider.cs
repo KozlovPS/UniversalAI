@@ -62,6 +62,7 @@ public class GigaChatProvider : IAIProvider
 
     public async Task<ChatResult> SendMessageAsync(ChatRequest request, CancellationToken cancellationToken = default)
     {
+        if (request.Stop is { Count: > 0 }) throw new NotSupportedException("Stop sequence не реализована для GigaChat; для полного day2 выберите OpenAI-compatible endpoint.");
         ValidateRequest(request);
 
         string token = await GetAccessTokenAsync(

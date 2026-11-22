@@ -114,6 +114,14 @@ public sealed class ExperimentDocuments
             if (updates.Completed) doc.Outcomes.Add(new("Очистка слоёв", updates.CleanupPassed ? 1 : 0, 1,
                 "Рабочая и временная память очищены; текущие факты и списки долговременной памяти сохранены."));
         }
+        if (view.Foundation is { } foundation)
+        {
+            doc.ReportComplete = foundation.Completed;
+            foreach (var group in foundation.Observations.GroupBy(o => o.Group))
+                doc.Outcomes.Add(new(group.Key, group.Count(o => o.Passed), group.Count(),
+                    foundation.Day == 2 ? $"Парсинг JSON: {group.Count(o => o.Parseable == true)}/{group.Count()}; схема: {group.Count(o => o.SchemaValid == true)}/{group.Count()}; ошибки: {group.Count(o => o.Error != null)}."
+                    : "Production API/agent/storage; локальные оценки отделены от usage API."));
+        }
         foreach (var result in Array(report, "Results"))
         {
             if (Number(result, "CorrectTasks") is { } passed && Number(result, "TaskCount") is { } total)

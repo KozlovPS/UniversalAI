@@ -75,7 +75,7 @@ public sealed class Day10ContextSession(Day10MemoryState state, IAIProvider prov
         ChatMessage user = new() { Role = "user", Content = text };
         var response = await provider.SendMessageAsync(new ChatRequest
         {
-            Model = State.Model, Temperature = 0, MaxTokens = 240,
+            Model = State.Model, Temperature = 0,
             Messages = [new() { Role = "system", Content = State.SystemPrompt }, .. context, user]
         }, cancellationToken);
         StickyFactsMemory.EnsureComplete(response);

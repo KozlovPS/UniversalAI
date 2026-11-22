@@ -16,6 +16,7 @@ public class ChatRequest
     public double? Temperature { get; set; }
 
     public JsonElement? ResponseFormat { get; set; }
+    public List<string>? Stop { get; set; }
 
     public double? TopP { get; set; }
 

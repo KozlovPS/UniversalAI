@@ -14,7 +14,6 @@ namespace UniversalAI.Benchmarks;
 public static class Day4TemperatureBenchmark
 {
     private const int Repetitions = 5;
-    private const int MaxAnswerTokens = 400;
 
     private static readonly double[] Temperatures = [0, 0.7, 1.2];
 
@@ -85,7 +84,6 @@ public static class Day4TemperatureBenchmark
                     new ChatRequest
                     {
                         Model = options.Model,
-                        MaxTokens = MaxAnswerTokens,
                         Temperature = temperature
                     },
                     capabilities);
@@ -232,7 +230,6 @@ public static class Day4TemperatureBenchmark
             {
                 Model = model,
                 Messages = [new ChatMessage { Role = "user", Content = task.Prompt }],
-                MaxTokens = MaxAnswerTokens,
                 Temperature = temperature
             });
 

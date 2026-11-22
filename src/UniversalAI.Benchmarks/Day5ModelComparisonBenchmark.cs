@@ -14,7 +14,6 @@ public static class Day5ModelComparisonBenchmark
 {
     private static string PriceSource => UniversalAI.Configuration.PricingCatalog.Default.Source;
     private static string PriceSnapshot => UniversalAI.Configuration.PricingCatalog.Default.Snapshot;
-    private const int MaxAnswerTokens = 1024;
     private static IReadOnlyList<ModelUnderTest> Models => UniversalAI.Configuration.PricingCatalog.Default.Models
         .Select(p => new ModelUnderTest(p.Tier, p.Model, p.Input, p.Output)).ToList();
     public static async Task<int> RunAsync(string[] args)
@@ -63,7 +62,7 @@ public static class Day5ModelComparisonBenchmark
             {
                 ModelCapabilities capabilities = BenchmarkOutput.ResolveModel(provider.Name, model.ModelId);
                 ChatRequestValidator.Validate(
-                    new ChatRequest { Model = model.ModelId, MaxTokens = MaxAnswerTokens },
+                    new ChatRequest { Model = model.ModelId },
                     capabilities);
             }
 
@@ -183,7 +182,6 @@ public static class Day5ModelComparisonBenchmark
             {
                 Model = model.ModelId,
                 Messages = [new ChatMessage { Role = "user", Content = task.Question }],
-                MaxTokens = MaxAnswerTokens
             });
 
             promptTokens = response.PromptTokens;

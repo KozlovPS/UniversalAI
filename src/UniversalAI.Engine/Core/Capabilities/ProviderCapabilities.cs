@@ -19,6 +19,7 @@ public class ProviderCapabilities
     public bool SupportsReasoningBudgetTokens { get; set; }
 
     public bool SupportsJsonSchema { get; set; }
+    public bool SupportsStopSequence { get; set; }
 
     public bool SupportsStreaming { get; set; }
 

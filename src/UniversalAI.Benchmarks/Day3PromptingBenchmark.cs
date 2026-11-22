@@ -12,7 +12,6 @@ namespace UniversalAI.Benchmarks;
 
 public static class Day3PromptingBenchmark
 {
-    private const int MaxAnswerTokens = 1024;
 
     private static readonly IReadOnlyList<BenchmarkStrategy> Strategies =
     [
@@ -248,7 +247,6 @@ public static class Day3PromptingBenchmark
             {
                 Model = model,
                 Messages = [new ChatMessage { Role = "user", Content = content }],
-                MaxTokens = MaxAnswerTokens,
                 ReasoningEffort = setting.ApiEffort
             });
 

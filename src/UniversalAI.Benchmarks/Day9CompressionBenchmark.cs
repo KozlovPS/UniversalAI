@@ -132,7 +132,7 @@ public static class Day9CompressionBenchmark
             {
                 ChatMessage user = new() { Role = "user", Content = userText };
                 BenchmarkOutput.WriteLine($"\nПОЛЬЗОВАТЕЛЬ — сообщение {transcript.Count + 1}/30:\n{userText}");
-                ChatResult reply = await provider.SendMessageAsync(Request(model, [.. transcript, user], 160));
+                ChatResult reply = await provider.SendMessageAsync(Request(model, [.. transcript, user]));
                 EnsureComplete(reply);
                 dialogueCalls.Add(reply);
                 transcript.Add(user);
@@ -182,10 +182,10 @@ public static class Day9CompressionBenchmark
                 ChatMessage question = new() { Role = "user", Content = probe.Question };
                 BenchmarkOutput.WriteLine($"\nВОПРОС {probes.Count + 1}/{Day9CompressionScenario.Probes.Length}: {probe.Question}\nЭТАЛОН: {probe.Expected}");
                 provider.CallLabel = "БЕЗ СЖАТИЯ: ПОЛНАЯ ИСТОРИЯ + ВОПРОС";
-                ChatResult full = await provider.SendMessageAsync(Request(model, [.. transcript, question], 120));
+                ChatResult full = await provider.SendMessageAsync(Request(model, [.. transcript, question]));
                 EnsureComplete(full);
                 provider.CallLabel = "СО СЖАТИЕМ: SUMMARY + ПОСЛЕДНИЕ СООБЩЕНИЯ + ВОПРОС";
-                ChatResult compact = await provider.SendMessageAsync(Request(model, [.. compressed.Messages, question], 120));
+                ChatResult compact = await provider.SendMessageAsync(Request(model, [.. compressed.Messages, question]));
                 EnsureComplete(compact);
                 probes.Add(new(probe.Detail, probe.Expected, probe.Question, full, compact,
                     Day9CompressionScenario.IsCorrect(probe, full.Content),
@@ -233,9 +233,9 @@ public static class Day9CompressionBenchmark
         BenchmarkOutput.WriteLine($"Результаты: {Path.GetFullPath(output)}");
     }
 
-    private static ChatRequest Request(string model, List<ChatMessage> history, int maxTokens) => new()
+    private static ChatRequest Request(string model, List<ChatMessage> history) => new()
     {
-        Model = model, MaxTokens = maxTokens, Temperature = 0,
+        Model = model, Temperature = 0,
         Messages = [new() { Role = "system", Content = Day9CompressionScenario.SystemPrompt }, .. history]
     };
 

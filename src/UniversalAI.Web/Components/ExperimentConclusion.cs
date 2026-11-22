@@ -17,7 +17,12 @@ public sealed record ExperimentConclusion(string Finding, string Evidence, strin
         string evidence = $"Пройдено {passed} из {total} сохранённых проверок.";
         string scope = "Вывод относится к этому прогону, модели и проверенным заданиям; он не доказывает результат для любых запросов.";
         string finding;
-        if (benchmarkId == "day15" && view.MemoryUpdates is { } updates)
+        if (view.Foundation is { } foundation)
+        {
+            finding = !foundation.Completed ? "Прогон не завершён; показаны сохранённые этапы." : foundation.Conclusion;
+            scope += " Ошибки API, нарушения формата и успешное завершение протокола различаются. Непройденные проверки не скрываются.";
+        }
+        else if (benchmarkId == "day15" && view.MemoryUpdates is { } updates)
         {
             finding = !updates.Completed ? "Прогон не завершён: доступны частичные проверки обновления памяти."
                 : passed == total ? "В проверенном диалоге память обновлялась корректно, устаревшие значения не использовались, очистка задачи сохранила долговременные данные."

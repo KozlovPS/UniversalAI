@@ -26,7 +26,7 @@ public sealed class BenchmarkRunner(BenchmarkRegistry registry, FileRunStore sto
             throw new ArgumentException("Day-3 требует модель с поддержкой reasoning_effort.");
         // Freeze the endpoint and settings now, not when the queue eventually executes.
         var frozenProfile = JsonSerializer.Deserialize<ProviderProfile>(JsonSerializer.Serialize(profile))!;
-        string model = settings.Model ?? (benchmarkId is "day9" or "day10" && profile.Id == "proxyapi"
+        string model = settings.Model ?? (benchmarkId is "day2" or "day4" or "day8" or "day9" or "day10" && profile.Id == "proxyapi"
             ? "openai/gpt-4o-mini" : profile.DefaultModel);
         if (string.IsNullOrWhiteSpace(model)) throw new ArgumentException("Укажите модель.");
         var run = new BenchmarkRun
@@ -58,6 +58,7 @@ public sealed class BenchmarkRunner(BenchmarkRegistry registry, FileRunStore sto
             await store.SaveAsync(run, ct);
             await SnapshotFile.WriteAllTextAsync(Path.Combine(store.GetDirectory(run.Id), "pricing.json"),
                 JsonSerializer.Serialize(PricingCatalog.Default, FileRunStore.Json), ct);
+            writer.WriteLine($"ИСХОДНОЕ ЗАДАНИЕ БЕЗ СОКРАЩЕНИЙ\n{materials.AssignmentSource}\n{materials.Assignment}\nКОНЕЦ ИСХОДНОГО ЗАДАНИЯ\n");
             var recorder = new RecordingProvider(providers.Create(run.Provider), directory, ct, async () =>
             {
                 run = run with { CompletedCalls = run.CompletedCalls + 1 };
@@ -137,11 +138,22 @@ public static class BenchmarkRegistration
 {
     public static IServiceCollection AddUniversalAIBenchmarks(this IServiceCollection services)
     {
-        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day3", "Промптинг", "Четыре стратегии и два уровня reasoning", true, HasReasoning: true), Day3PromptingBenchmark.ExecuteAsync));
-        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day4", "Температура", "Повторяемость и разнообразие ответов", true), Day4TemperatureBenchmark.ExecuteAsync));
-        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day5", "Сравнение моделей", "Точность, скорость и стоимость трёх моделей", false), Day5ModelComparisonBenchmark.ExecuteAsync));
-        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day9", "Сжатие истории", "Полная история и накопительное summary", true), Day9CompressionBenchmark.ExecuteAsync));
-        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day10", "Стратегии памяти", "Окно, facts, summary и независимые ветки", true, HasMemory: true, HasBranches: true), Day10ContextBenchmark.ExecuteAsync));
+        foreach (int number in new[] { 1, 2, 6, 7, 8 })
+        {
+            int day = number;
+            var assignment = CourseAssignments.Find("day" + day)!;
+            services.AddSingleton<IBenchmark>(new DayBenchmark(new("day" + day, assignment.Title,
+                day == 2 ? "6 способов контроля формата × 3 повтора: JSON, max_tokens, stop и строгая schema"
+                : day == 6 ? "Без инструментов, один инструмент и два зависимых вызова подряд"
+                : day == 7 ? "SQLite: история с tool calls/results, закрытие runtime и восстановление"
+                : day == 8 ? "Токены короткого/длинного диалога и фактическая ошибка переполнения"
+                : "Один запрос через HTTP API, ответ и вывод результата", true), (s, c) => FoundationBenchmarks.ExecuteAsync(day, s, c)));
+        }
+        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day3", "Промптинг", "Четыре стратегии и два уровня reasoning", true, HasReasoning: true, ScenarioVersion: "2"), Day3PromptingBenchmark.ExecuteAsync));
+        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day4", "Температура", "Повторяемость и разнообразие ответов", true, ScenarioVersion: "2"), Day4TemperatureBenchmark.ExecuteAsync));
+        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day5", "Сравнение моделей", "Точность, скорость и стоимость трёх моделей", false, ScenarioVersion: "2"), Day5ModelComparisonBenchmark.ExecuteAsync));
+        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day9", "Сжатие истории", "Полная история и накопительное summary", true, ScenarioVersion: "2"), Day9CompressionBenchmark.ExecuteAsync));
+        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day10", "Стратегии памяти", "Окно, facts, summary и независимые ветки", true, HasMemory: true, HasBranches: true, ScenarioVersion: "2"), Day10ContextBenchmark.ExecuteAsync));
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day11", "Слои памяти", "Диалог, задача и долговременные facts: состав промпта, токены и пошаговая очистка", true, ScenarioVersion: Day11MemoryLayersBenchmark.ScenarioVersion), Day11MemoryLayersBenchmark.ExecuteAsync));
         services.AddSingleton<BenchmarkRegistry>();
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day15", "Обновление памяти", "Четыре замены фактов, приоритет времени, журнал конфликтов и очистка задачи", true,
