@@ -34,6 +34,8 @@ public static class ServiceRegistration
         services.AddScoped<IAgent, DirectChatAgent>();
         services.AddScoped<TaskWorkflowAgent>();
         services.AddScoped<InvariantAgent>();
+        services.AddScoped<EvolvingMemoryAgent>();
+        services.AddScoped<IAgent>(sp => sp.GetRequiredService<EvolvingMemoryAgent>());
         services.AddScoped<IAgent>(sp => sp.GetRequiredService<InvariantAgent>());
         services.AddScoped<IAgent>(sp => sp.GetRequiredService<TaskWorkflowAgent>());
         services.AddScoped<ChatService>();

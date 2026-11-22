@@ -24,7 +24,7 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
             c.CompressionEnabled, c.ContextKeepLastMessages, c.ContextCompressionBatchSize,
             c.Temperature, c.MaxTokens, c.SystemPrompt, c.UpdatedAt, c.FactsJson, summary?.Content,
             c.TopP, c.FrequencyPenalty, c.PresencePenalty, c.Seed, c.ReasoningEffort, c.ReasoningBudgetTokens, c.WorkingMemoryJson, c.UserProfileJson,
-            Tasks.TaskStateMachine.Parse(c.TaskStateJson), c.InvariantStateJson, ConversationModules.Resolve(c));
+            Tasks.TaskStateMachine.Parse(c.TaskStateJson), c.InvariantStateJson, ConversationModules.Resolve(c), c.EvolvingMemoryJson);
     }
 
     public Task<IReadOnlyList<ProviderInfo>> ProvidersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProviderInfo>>(
@@ -181,6 +181,8 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
             var modules = ConversationModules.Resolve(c);
             if (modules.Invariants || content.StartsWith("/invariant", StringComparison.Ordinal))
                 return await sp.GetRequiredService<InvariantAgent>().RunAsync(id, content, ct);
+            if (content.StartsWith("/remember ", StringComparison.Ordinal))
+                return await sp.GetRequiredService<EvolvingMemoryAgent>().RunAsync(id, content, ct);
             if (modules.Tasks || content.StartsWith("/task ", StringComparison.OrdinalIgnoreCase))
                 return await sp.GetRequiredService<TaskWorkflowAgent>().RunAsync(id, content, ct);
             string baseAgent = c.AgentId is "task" or "invariants" ? "direct" : c.AgentId;

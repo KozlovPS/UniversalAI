@@ -24,7 +24,7 @@
     <header class="panel chat-conversation-heading"><div><span class="eyebrow">ОТКРЫТЫЙ ДИАЛОГ</span><h2>@_current.Title</h2><p>@_total сообщений · @_current.Model</p></div><div class="actions"><button class="secondary" disabled="@Unavailable" @onclick="Branch">Создать ветку</button><button class="secondary" disabled="@Unavailable" @onclick="RefreshCurrent">Обновить</button></div></header>
     <details class="panel chat-settings"><summary>Настройки диалога <span>@_current.MemoryStrategy · @_current.AgentId</span></summary>
     <section class="stack">
-        <div class="form-row"><label>Подключение<select @bind="_provider" disabled="@Unavailable" @bind:after="ProviderChanged">@foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }</select></label><label>Ответы<select @bind="_agent" disabled="@Unavailable">@foreach (var a in _agents.Where(a => a.Id is "direct" or "tools")) { <option value="@a.Id">@a.Name</option> }</select></label><label>Память<select @bind="_memory" disabled="@Unavailable"><option>Summary</option><option>SlidingWindow</option><option>StickyFacts</option><option>Layered</option></select></label></div>
+        <div class="form-row"><label>Подключение<select @bind="_provider" disabled="@Unavailable" @bind:after="ProviderChanged">@foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }</select></label><label>Ответы<select @bind="_agent" disabled="@Unavailable">@foreach (var a in _agents.Where(a => a.Id is "direct" or "tools" or "evolving")) { <option value="@a.Id">@a.Name</option> }</select></label><label>Память<select @bind="_memory" disabled="@Unavailable"><option>Summary</option><option>SlidingWindow</option><option>StickyFacts</option><option>Layered</option></select></label></div>
         <div class="form-row"><label>Модель<input @bind="_model" disabled="@Unavailable" /></label><label>Температура<input type="number" step="0.1" min="0" max="2" @bind="_temperature" disabled="@Unavailable" /></label><label>Лимит ответа<input type="number" min="1" @bind="_maxTokens" disabled="@Unavailable" /></label></div>
         <details><summary>Параметры контекста</summary><div class="form-row"><label>Последние сообщения<input type="number" min="2" @bind="_keep" /></label><label>Пакет summary<input type="number" min="1" @bind="_batch" /></label><label class="check"><input type="checkbox" @bind="_enabled" /> Память включена</label></div><label>Системный промпт<textarea rows="3" @bind="_prompt"></textarea></label></details>
         <div><button class="secondary" disabled="@Unavailable" @onclick="Save">Сохранить настройки</button></div>
@@ -64,6 +64,15 @@
         <div class="actions"><button disabled="@Unavailable" @onclick="SaveProfile">Сохранить профиль</button><button class="secondary" disabled="@Unavailable" @onclick="ClearProfile">Удалить профиль</button></div>
         <details><summary>Сохранённый профиль и источники</summary><pre>@_current.UserProfileJson</pre></details>
     </section>
+    }
+    @if (_current.AgentId == "evolving")
+    {
+        <details><summary>Обновляемая память: запись и журнал</summary>
+            <p>Явная запись: <code>@("/remember {\"Key\":\"deadline\",\"Value\":\"2026-12-20\",\"Policy\":\"replace\"}")</code></p>
+            <p>replace — замена срока, статуса, версии или требования; append — список решений и изменений; task — до завершения задачи. Время записи назначает сервер; необязательный WrittenAt задаёт время события. При равном времени остаётся сохранённое значение.</p>
+            <p>/remember list · /remember audit · /remember complete. История и журнал замен сохраняются для просмотра, в промпт входят только текущие данные и текущий вопрос. Завершение очищает рабочие и временные данные.</p>
+            <pre>@_current.EvolvingMemoryJson</pre>
+        </details>
     }
     @if (_current.MemoryStrategy == "Layered")
     {

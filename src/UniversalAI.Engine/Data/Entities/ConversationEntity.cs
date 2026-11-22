@@ -39,6 +39,7 @@ public class ConversationEntity
     public string UserProfileJson { get; set; } = "{}";
     public string TaskStateJson { get; set; } = "null";
     public string InvariantStateJson { get; set; } = "{}";
+    public string EvolvingMemoryJson { get; set; } = "{}";
     public string ModulesJson { get; set; } = "{}";
     public int ProfilePromptTokens { get; set; }
     public int ProfileCompletionTokens { get; set; }

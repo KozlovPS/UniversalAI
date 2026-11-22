@@ -10,7 +10,7 @@ public sealed record ConversationInfo(int Id, string Title, string Model, string
     double? FrequencyPenalty = null, double? PresencePenalty = null, int? Seed = null,
     string? ReasoningEffort = null, int? ReasoningBudgetTokens = null, string WorkingMemoryJson = "{}",
     string UserProfileJson = "{}", Tasks.TaskWorkflowState? TaskState = null, string InvariantStateJson = "{}",
-    ConversationModules? Modules = null);
+    ConversationModules? Modules = null, string EvolvingMemoryJson = "{}");
 public sealed record CreateConversationRequest(string? Title = null, string? ProviderId = null,
     string? Model = null, string AgentId = "direct");
 public sealed record ConversationSettings(string? Model = null, string? AgentId = null,

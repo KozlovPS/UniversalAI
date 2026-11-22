@@ -21,6 +21,15 @@ public static class BenchmarkMaterialsCatalog
     public static ExperimentMaterials Create(BenchmarkDefinition definition)
     {
         var materials = new ExperimentMaterials { Title = definition.Name, Goal = definition.Description };
+        if (definition.Id == "day15")
+        {
+            materials = materials with { AssignmentSource = "DAYS.md · День 15 · 22.11.2026",
+                Assignment = "Память должна обновляться: замена сроков/статусов/версий; списки решений и изменений; удаление временных фактов после завершения. Каждый факт с временем записи, более поздняя запись приоритетна. Замены логируются. В диалоге меняются 3–4 факта; после каждого изменения проверяются актуальные ответы, число устаревших значений и их отсутствие в промпте. После завершения рабочая память очищена, долговременная сохранена.",
+                Plan = ["Записать четыре исходных факта, задать контрольные вопросы.", "Заменить четыре значения, после каждой замены проверить ответ и промпт.", "Отклонить запоздавшую запись; накопить два решения списком.", "Завершить задачу, проверить очистку рабочих/временных данных и сохранность долговременных фактов. 13 API-запросов."] };
+            materials.Groups.Add(new("Изменяемые факты", "Эталоны заданы сценарием; записи явные, с временем. История/audit не входят в модельный контекст.",
+                Day15MemoryUpdatesBenchmark.Keys.Select((k, i) => new ExperimentMaterialItem(k,
+                    Day15MemoryUpdatesBenchmark.Initial[i], Day15MemoryUpdatesBenchmark.Updated[i])).ToList()));
+        }
         if (definition.Id == "day14")
         {
             materials = materials with

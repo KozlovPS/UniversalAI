@@ -69,6 +69,12 @@ public sealed class ContextCompressionService(IContextMemoryStore conversations)
         string? currentUserText)
     {
         int rawTokens = TokenUsageCalculator.EstimateMessages(history);
+        if (conversation.AgentId == "evolving")
+        {
+            var messages = Context.EvolvingMemory.Build(Context.EvolvingMemory.Parse(conversation.EvolvingMemoryJson),
+                conversation.WorkingMemoryJson, "", conversation.Model).Messages.Take(2).ToList();
+            return new(messages, rawTokens, TokenUsageCalculator.EstimateMessages(messages), history.Count, 0, false, null);
+        }
         if (!conversation.CompressionEnabled)
         {
             return new(history.ToList(), rawTokens, rawTokens, 0, history.Count, false, null);

@@ -17,7 +17,15 @@ public sealed record ExperimentConclusion(string Finding, string Evidence, strin
         string evidence = $"Пройдено {passed} из {total} сохранённых проверок.";
         string scope = "Вывод относится к этому прогону, модели и проверенным заданиям; он не доказывает результат для любых запросов.";
         string finding;
-        if (benchmarkId == "day14" && view.Invariants is { } invariants)
+        if (benchmarkId == "day15" && view.MemoryUpdates is { } updates)
+        {
+            finding = !updates.Completed ? "Прогон не завершён: доступны частичные проверки обновления памяти."
+                : passed == total ? "В проверенном диалоге память обновлялась корректно, устаревшие значения не использовались, очистка задачи сохранила долговременные данные."
+                : "Обновление памяти подтверждено частично: обнаружены расхождения в ответах или очистке.";
+            evidence += $" Устаревших ответов: {updates.StaleAnswers}; утечек в промпт: {updates.PromptLeaks}; очистка: {updates.CleanupPassed}.";
+            scope += " Записи явные; автоматическое извлечение фактов из свободной речи не проверяется. Оценка ответов лексическая.";
+        }
+        else if (benchmarkId == "day14" && view.Invariants is { } invariants)
         {
             finding = invariants.Bypasses > 0
                 ? "В проверенных попытках опубликованы решения, нарушающие инварианты: защита не прошла проверку."

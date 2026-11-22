@@ -144,6 +144,8 @@ public static class BenchmarkRegistration
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day10", "Стратегии памяти", "Окно, facts, summary и независимые ветки", true, HasMemory: true, HasBranches: true), Day10ContextBenchmark.ExecuteAsync));
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day11", "Слои памяти", "Диалог, задача и долговременные facts: состав промпта, токены и пошаговая очистка", true, ScenarioVersion: Day11MemoryLayersBenchmark.ScenarioVersion), Day11MemoryLayersBenchmark.ExecuteAsync));
         services.AddSingleton<BenchmarkRegistry>();
+        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day15", "Обновление памяти", "Четыре замены фактов, приоритет времени, журнал конфликтов и очистка задачи", true,
+            ScenarioVersion: Day15MemoryUpdatesBenchmark.ScenarioVersion, ScorerVersion: Day15MemoryUpdatesBenchmark.ScorerVersion), Day15MemoryUpdatesBenchmark.ExecuteAsync));
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day14", "Инварианты", "Проверка решений кодом, 8 попыток обхода и явная замена с аудитом", true,
             ScenarioVersion: Day14InvariantsBenchmark.ScenarioVersion, ScorerVersion: Day14InvariantsBenchmark.ScorerVersion), Day14InvariantsBenchmark.ExecuteAsync));
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day13", "Состояние задачи", "Конечный автомат, утверждение плана, паузы, продолжение и запреты переходов", true,

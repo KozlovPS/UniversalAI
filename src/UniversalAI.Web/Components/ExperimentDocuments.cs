@@ -105,6 +105,15 @@ public sealed class ExperimentDocuments
                         : "Сохранённые оценки шагов; ответы повторно не оцениваются."));
             }
         }
+        if (view.MemoryUpdates is { } updates)
+        {
+            doc.ReportComplete = updates.Completed;
+            foreach (var group in updates.Observations.GroupBy(o => o.Group))
+                doc.Outcomes.Add(new(group.Key, group.Count(o => o.Passed), group.Count(),
+                    $"Устаревших ответов: {group.Count(o => o.StaleAnswer)}; утечек в промпт: {group.Count(o => o.PromptLeak)}."));
+            if (updates.Completed) doc.Outcomes.Add(new("Очистка слоёв", updates.CleanupPassed ? 1 : 0, 1,
+                "Рабочая и временная память очищены; текущие факты и списки долговременной памяти сохранены."));
+        }
         foreach (var result in Array(report, "Results"))
         {
             if (Number(result, "CorrectTasks") is { } passed && Number(result, "TaskCount") is { } total)

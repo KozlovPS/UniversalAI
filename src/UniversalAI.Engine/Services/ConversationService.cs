@@ -135,6 +135,13 @@ public class ConversationService : IContextMemoryStore
             }
         }
 
+        if (preparedContext?.PendingTaskState is { Stage: Tasks.TaskStage.Done } &&
+            Tasks.TaskStateMachine.Parse(conversation.TaskStateJson)?.Stage != Tasks.TaskStage.Done)
+        {
+            conversation.WorkingMemoryJson = "{}";
+            conversation.EvolvingMemoryJson = JsonSerializer.Serialize(Context.EvolvingMemory.Complete(
+                Context.EvolvingMemory.Parse(conversation.EvolvingMemoryJson), DateTimeOffset.UtcNow));
+        }
         if (preparedContext?.PendingTaskState is { } taskState)
             conversation.TaskStateJson = JsonSerializer.Serialize(taskState);
         if (preparedContext?.ClearTaskState == true) conversation.TaskStateJson = "null";
@@ -207,6 +214,7 @@ public class ConversationService : IContextMemoryStore
         }
 
         conversation.FactsJson = "{}";
+        conversation.EvolvingMemoryJson = "{}";
         conversation.WorkingMemoryJson = "{}";
         conversation.UserProfileJson = "{}";
         conversation.TaskStateJson = "null";

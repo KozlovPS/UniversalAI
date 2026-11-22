@@ -32,6 +32,11 @@ if (args.FirstOrDefault() == "--serve-fake")
         string last = body.RootElement.GetProperty("messages").EnumerateArray().Last().GetProperty("content").GetString() ?? "";
         var messages = body.RootElement.GetProperty("messages").EnumerateArray().Select(m => new ChatMessage
             { Role = m.GetProperty("role").GetString()!, Content = m.GetProperty("content").GetString() ?? "" }).ToList();
+        if (messages[0].Content == UniversalAI.Services.Context.EvolvingMemory.Instructions)
+        {
+            return Results.Json(new { choices = new[] { new { message = new { role = "assistant", content = Day15Checks.MemoryProvider.Respond(messages) }, finish_reason = "stop" } },
+                usage = new { prompt_tokens = 10, completion_tokens = 5, total_tokens = 15 } });
+        }
         if (messages[0].Content.StartsWith(UniversalAI.Services.Invariants.InvariantPolicy.Instructions, StringComparison.Ordinal))
         {
             string reply = Day14Checks.InvariantProvider.Respond(messages);
@@ -229,6 +234,7 @@ await Day11Checks.RunAsync(root);
 await Day12Checks.RunAsync(root);
 await Day13Checks.RunAsync(root);
 await Day14Checks.RunAsync(root);
+await Day15Checks.RunAsync(root);
 await ConversationModuleChecks.RunAsync(root);
 await SnapshotFileChecks.RunAsync(root);
 await ExperimentPresentationChecks.RunAsync(root);
