@@ -1,6 +1,6 @@
 <div class="experiment-document scenario-document">
     <header class="document-heading"><div><div class="document-kicker">@BenchmarkId.ToUpperInvariant() · ИСХОДНЫЕ МАТЕРИАЛЫ</div><h2>Сценарий эксперимента</h2><p>Задачи, факты, контрольные вопросы и условия проверки</p></div><span class="scenario-count">@Documents.Materials.Groups.Sum(g => g.Items.Count)<small>материалов</small></span></header>
-    <div class="document-source">@(Documents.HasSavedMaterials ? "Снимок материалов сохранён вместе с этим прогоном." : "Материалы восстановлены из доступных файлов этого прогона; описание методики — из приложения.")</div>
+    <div class="document-source">@(Documents.IsPreview ? "Планируемый сценарий текущей версии. Запросы к модели начнутся только после запуска." : Documents.HasSavedMaterials ? "Снимок материалов сохранён вместе с этим прогоном." : "Материалы восстановлены из доступных файлов этого прогона; описание методики — из приложения.")</div>
     @if (Documents.Materials.Goal.Length > 0) { <div class="scenario-goal"><span>ЦЕЛЬ ЭКСПЕРИМЕНТА</span><p>@Documents.Materials.Goal</p></div> }
     @if (Documents.Materials.Plan.Count > 0)
     {
@@ -18,7 +18,7 @@
         </section>
     }
     @foreach (var notice in Documents.Notices) { <p class="document-note" role="status">@notice</p> }
-    <footer class="document-provenance">Набор материалов описывает сценарий; наличие записи здесь не означает, что все запросы завершились. Исходные артефакты доступны во вкладке файлов.</footer>
+    <footer class="document-provenance">@(Documents.IsPreview ? "После запуска ход появится в журнале, а сохранённые оценки и вывод — в итоговом отчёте." : "Набор материалов описывает сценарий; наличие записи здесь не означает, что все запросы завершились. Исходные артефакты доступны во вкладке файлов.")</footer>
 </div>
 @code {
     [Parameter, EditorRequired] public ExperimentDocuments Documents { get; set; } = new();

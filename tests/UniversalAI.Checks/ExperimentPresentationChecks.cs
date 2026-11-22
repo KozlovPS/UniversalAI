@@ -50,6 +50,17 @@ static class ExperimentPresentationChecks
         await using var renderer = new HtmlRenderer(services, services.GetRequiredService<ILoggerFactory>());
         async Task<string> Render<T>(Dictionary<string, object?> parameters) where T : IComponent =>
             await renderer.Dispatcher.InvokeAsync(async () => (await renderer.RenderComponentAsync<T>(ParameterView.FromDictionary(parameters))).ToHtmlString());
+        var beforeRun = ExperimentDocuments.Preview(new("day14", "Инварианты", "Проверка инвариантов", true));
+        string lessonPreview = WebUtility.HtmlDecode(await Render<ExperimentLesson>(new() { ["Documents"] = beforeRun, ["BenchmarkId"] = "day14" }));
+        string scenarioPreview = WebUtility.HtmlDecode(await Render<ExperimentScenario>(new() { ["Documents"] = beforeRun, ["BenchmarkId"] = "day14" }));
+        Check(beforeRun.IsPreview && !beforeRun.HasSavedMaterials && beforeRun.Outcomes.Count == 0 && beforeRun.ReportComplete == null &&
+            lessonPreview.Contains("Прогон ещё не запущен") && scenarioPreview.Contains(Day14InvariantsBenchmark.Attacks[0]) &&
+            scenarioPreview.Contains("только после запуска") && !scenarioPreview.Contains("восстановлены из доступных файлов"),
+            "Предпросмотр показывает планируемые задание/сценарий без вымышленных результатов или архивных подписей");
+        RenderFragment launch = builder => builder.AddContent(0, "Запустить эксперимент");
+        string launchHtml = WebUtility.HtmlDecode(await Render<ExperimentWorkbench>(new() { ["Data"] = data, ["LaunchAction"] = launch }));
+        Check(launchHtml.Contains("Запустить эксперимент") && launchHtml.Contains("Управление плавным просмотром"),
+            "Кнопка нового запуска доступна в панели рядом с управлением просмотром записи");
         string previewHtml = WebUtility.HtmlDecode(await Render<ExperimentWorkbench>(new() { ["Data"] = data }));
         Check(previewHtml.Contains("Управление плавным просмотром") && !previewHtml.Contains("Сохранённый ответ"),
             "Плавный просмотр не раскрывает ответ до его очереди");

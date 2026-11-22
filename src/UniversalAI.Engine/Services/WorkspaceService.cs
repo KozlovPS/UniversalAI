@@ -24,7 +24,7 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
             c.CompressionEnabled, c.ContextKeepLastMessages, c.ContextCompressionBatchSize,
             c.Temperature, c.MaxTokens, c.SystemPrompt, c.UpdatedAt, c.FactsJson, summary?.Content,
             c.TopP, c.FrequencyPenalty, c.PresencePenalty, c.Seed, c.ReasoningEffort, c.ReasoningBudgetTokens, c.WorkingMemoryJson, c.UserProfileJson,
-            Tasks.TaskStateMachine.Parse(c.TaskStateJson));
+            Tasks.TaskStateMachine.Parse(c.TaskStateJson), c.InvariantStateJson, ConversationModules.Resolve(c));
     }
 
     public Task<IReadOnlyList<ProviderInfo>> ProvidersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProviderInfo>>(
@@ -118,6 +118,18 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
             }
             if (settings.MemoryStrategy != null) c.MemoryStrategy = settings.MemoryStrategy;
             await using var transaction = await sp.GetRequiredService<AppDbContext>().Database.BeginTransactionAsync(ct);
+            if (settings.Modules is { } modules)
+            {
+                var before = ConversationModules.Resolve(c);
+                if (before.Invariants != modules.Invariants)
+                {
+                    var invariants = Invariants.InvariantPolicy.Parse(c.InvariantStateJson);
+                    invariants = invariants with { Audit = [.. invariants.Audit,
+                        new(DateTimeOffset.UtcNow, "$module.enabled", before.Invariants.ToString(), modules.Invariants.ToString())] };
+                    c.InvariantStateJson = System.Text.Json.JsonSerializer.Serialize(invariants);
+                }
+                c.ModulesJson = System.Text.Json.JsonSerializer.Serialize(modules);
+            }
             if (settings.WorkingMemoryJson != null) c.WorkingMemoryJson = settings.WorkingMemoryJson;
             if (settings.LongTermMemoryJson != null) c.FactsJson = settings.LongTermMemoryJson;
             if (settings.UserProfileJson != null) c.UserProfileJson = settings.UserProfileJson;
@@ -166,9 +178,13 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
         {
             var c = await sp.GetRequiredService<ConversationService>().GetConversationAsync(id)
                 ?? throw new KeyNotFoundException("Диалог не найден.");
-            if (c.TaskStateJson != "null" || content.StartsWith("/task ", StringComparison.OrdinalIgnoreCase))
+            var modules = ConversationModules.Resolve(c);
+            if (modules.Invariants || content.StartsWith("/invariant", StringComparison.Ordinal))
+                return await sp.GetRequiredService<InvariantAgent>().RunAsync(id, content, ct);
+            if (modules.Tasks || content.StartsWith("/task ", StringComparison.OrdinalIgnoreCase))
                 return await sp.GetRequiredService<TaskWorkflowAgent>().RunAsync(id, content, ct);
-            return await sp.GetRequiredService<AgentRegistry>().Get(c.AgentId).RunAsync(id, content, ct);
+            string baseAgent = c.AgentId is "task" or "invariants" ? "direct" : c.AgentId;
+            return await sp.GetRequiredService<AgentRegistry>().Get(baseAgent).RunAsync(id, content, ct);
         });
     }
 

@@ -49,14 +49,14 @@ public sealed class BenchmarkRunner(BenchmarkRegistry registry, FileRunStore sto
         var writer = new TeeWriter(log, console);
         var materials = BenchmarkMaterialsCatalog.Create(registry.Get(run.BenchmarkId).Definition);
         // Save before the first API call, after each benchmark's empty-directory check.
-        var saveMaterials = new Lazy<Task>(() => File.WriteAllTextAsync(Path.Combine(directory, "experiment-materials.json"),
+        var saveMaterials = new Lazy<Task>(() => SnapshotFile.WriteAllTextAsync(Path.Combine(directory, "experiment-materials.json"),
             JsonSerializer.Serialize(materials, FileRunStore.Json), CancellationToken.None));
         try
         {
             ct.ThrowIfCancellationRequested();
             run = run with { Status = RunStatus.Running, StartedAt = DateTimeOffset.UtcNow };
             await store.SaveAsync(run, ct);
-            await File.WriteAllTextAsync(Path.Combine(store.GetDirectory(run.Id), "pricing.json"),
+            await SnapshotFile.WriteAllTextAsync(Path.Combine(store.GetDirectory(run.Id), "pricing.json"),
                 JsonSerializer.Serialize(PricingCatalog.Default, FileRunStore.Json), ct);
             var recorder = new RecordingProvider(providers.Create(run.Provider), directory, ct, async () =>
             {
@@ -85,7 +85,7 @@ public sealed class BenchmarkRunner(BenchmarkRegistry registry, FileRunStore sto
         {
             run = run with { FinishedAt = DateTimeOffset.UtcNow };
             await store.SaveAsync(run, CancellationToken.None);
-            await File.WriteAllTextAsync(Path.Combine(directory, "pricing.json"), JsonSerializer.Serialize(PricingCatalog.Default, FileRunStore.Json));
+            await SnapshotFile.WriteAllTextAsync(Path.Combine(directory, "pricing.json"), JsonSerializer.Serialize(PricingCatalog.Default, FileRunStore.Json));
             await saveMaterials.Value;
         }
         return run;
@@ -144,6 +144,8 @@ public static class BenchmarkRegistration
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day10", "Стратегии памяти", "Окно, facts, summary и независимые ветки", true, HasMemory: true, HasBranches: true), Day10ContextBenchmark.ExecuteAsync));
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day11", "Слои памяти", "Диалог, задача и долговременные facts: состав промпта, токены и пошаговая очистка", true, ScenarioVersion: Day11MemoryLayersBenchmark.ScenarioVersion), Day11MemoryLayersBenchmark.ExecuteAsync));
         services.AddSingleton<BenchmarkRegistry>();
+        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day14", "Инварианты", "Проверка решений кодом, 8 попыток обхода и явная замена с аудитом", true,
+            ScenarioVersion: Day14InvariantsBenchmark.ScenarioVersion, ScorerVersion: Day14InvariantsBenchmark.ScorerVersion), Day14InvariantsBenchmark.ExecuteAsync));
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day13", "Состояние задачи", "Конечный автомат, утверждение плана, паузы, продолжение и запреты переходов", true,
             ScenarioVersion: Day13TaskStateBenchmark.ScenarioVersion, ScorerVersion: Day13TaskStateBenchmark.ScorerVersion), Day13TaskStateBenchmark.ExecuteAsync));
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day12", "Персонализация", "Три противоположных профиля, пополнение из диалога и устойчивость на 10 вопросах", true, ScenarioVersion: Day12PersonalizationBenchmark.ScenarioVersion, ScorerVersion: Day12PersonalizationBenchmark.ScorerVersion), Day12PersonalizationBenchmark.ExecuteAsync));

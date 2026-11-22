@@ -189,8 +189,7 @@ public static class Day12PersonalizationBenchmark
         async Task AtomicAsync(string name, string content)
         {
             string path = Path.Combine(context.Directory, name);
-            await File.WriteAllTextAsync(path + ".tmp", content, CancellationToken.None);
-            File.Move(path + ".tmp", path, true);
+            await SnapshotFile.WriteAllTextAsync(path, content, CancellationToken.None);
         }
     }
 

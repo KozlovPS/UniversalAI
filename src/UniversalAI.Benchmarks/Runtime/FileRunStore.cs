@@ -26,19 +26,22 @@ public sealed class FileRunStore(AppPaths paths)
         {
             var directory = GetDirectory(run.Id); Directory.CreateDirectory(directory);
             string path = Path.Combine(directory, "run.json");
-            string temporary = path + ".tmp";
-            await File.WriteAllTextAsync(temporary, JsonSerializer.Serialize(run, Json), ct);
-            File.Move(temporary, path, overwrite: true);
+            await SnapshotFile.WriteAllTextAsync(path, JsonSerializer.Serialize(run, Json), ct);
         }
         finally { _writes.Release(); }
     }
     public async Task<BenchmarkRun> GetAsync(string id, CancellationToken ct = default)
     {
+        await _writes.WaitAsync(ct);
+        try { return await ReadAsync(id, ct); }
+        finally { _writes.Release(); }
+    }
+    private async Task<BenchmarkRun> ReadAsync(string id, CancellationToken ct)
+    {
         string path = Path.Combine(GetDirectory(id), "run.json");
         if (!File.Exists(path)) throw new KeyNotFoundException("Запуск не найден.");
         // Readers must allow atomic replacement of run.json while the runner records progress.
-        await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
-            FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.Asynchronous);
+        await using var stream = await SnapshotFile.OpenReadAsync(path, ct);
         return await JsonSerializer.DeserializeAsync<BenchmarkRun>(stream, Json, ct)
             ?? throw new InvalidDataException("Пустые метаданные запуска.");
     }
@@ -61,7 +64,7 @@ public sealed class FileRunStore(AppPaths paths)
         await _writes.WaitAsync(ct);
         try
         {
-            var run = await GetAsync(id, ct);
+            var run = await ReadAsync(id, ct);
             if (run.Status is RunStatus.Running or RunStatus.Queued)
                 throw new InvalidOperationException("Сначала остановите прогон и дождитесь завершения.");
             string directory = Path.GetFullPath(GetDirectory(id));
@@ -78,7 +81,8 @@ public sealed class FileRunStore(AppPaths paths)
     {
         _ = await GetAsync(id, ct);
         var directory = GetArtifactsDirectory(id);
-        return Directory.Exists(directory) ? Directory.GetFiles(directory).Select(Path.GetFileName).OfType<string>().Order().ToList() : [];
+        return Directory.Exists(directory) ? Directory.GetFiles(directory).Select(Path.GetFileName).OfType<string>()
+            .Where(name => !name.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)).Order().ToList() : [];
     }
     public async Task RecoverInterruptedAsync(CancellationToken ct = default)
     {

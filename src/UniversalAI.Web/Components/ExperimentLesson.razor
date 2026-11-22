@@ -3,7 +3,8 @@
     @if (Documents.Materials.Assignment is { Length: > 0 } assignment)
     {
         <div class="document-source">@Documents.Materials.AssignmentSource</div>
-        @if (!Documents.HasSavedMaterials) { <p class="document-note">В этом архиве нет отдельного снимка задания. Показан добавленный текст задания дня; материалы и результаты самого прогона находятся в соседних вкладках.</p> }
+        @if (Documents.IsPreview) { <p class="document-note">Задание текущей версии эксперимента. Прогон ещё не запущен.</p> }
+        else if (!Documents.HasSavedMaterials) { <p class="document-note">В этом архиве нет отдельного снимка задания. Показан добавленный текст задания дня; материалы и результаты самого прогона находятся в соседних вкладках.</p> }
         <section class="document-section assignment-text"><ReadableReport Text="@assignment" /></section>
     }
     else

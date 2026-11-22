@@ -26,10 +26,18 @@ if (args.FirstOrDefault() == "--serve-fake")
     app.MapGet("/v1/models", () => Results.Json(new { data = new[] { new { id = "fake-local" } } }));
     app.MapPost("/v1/chat/completions", async (HttpRequest request) =>
     {
+        if (int.TryParse(Environment.GetEnvironmentVariable("UNIVERSALAI_CHECKS_FAKE_DELAY_MS"), out int delay) && delay > 0)
+            await Task.Delay(delay, request.HttpContext.RequestAborted);
         using var body = await JsonDocument.ParseAsync(request.Body);
         string last = body.RootElement.GetProperty("messages").EnumerateArray().Last().GetProperty("content").GetString() ?? "";
         var messages = body.RootElement.GetProperty("messages").EnumerateArray().Select(m => new ChatMessage
             { Role = m.GetProperty("role").GetString()!, Content = m.GetProperty("content").GetString() ?? "" }).ToList();
+        if (messages[0].Content.StartsWith(UniversalAI.Services.Invariants.InvariantPolicy.Instructions, StringComparison.Ordinal))
+        {
+            string reply = Day14Checks.InvariantProvider.Respond(messages);
+            return Results.Json(new { choices = new[] { new { message = new { role = "assistant", content = reply }, finish_reason = "stop" } },
+                usage = new { prompt_tokens = 10, completion_tokens = 5, total_tokens = 15 } });
+        }
         bool taskIntent = body.RootElement.TryGetProperty("tools", out var definitions) && definitions.ValueKind == JsonValueKind.Array &&
             definitions.EnumerateArray().Any(t => t.GetProperty("function").GetProperty("name").GetString() == "request_task_action");
         if (taskIntent || messages.Any(m => m.Content.Contains("Ты ассистент с конечным автоматом задачи.")))
@@ -220,6 +228,9 @@ Check((await workspace.ListAsync()).Count == 0 && (await store.ListAsync()).Coun
 await Day11Checks.RunAsync(root);
 await Day12Checks.RunAsync(root);
 await Day13Checks.RunAsync(root);
+await Day14Checks.RunAsync(root);
+await ConversationModuleChecks.RunAsync(root);
+await SnapshotFileChecks.RunAsync(root);
 await ExperimentPresentationChecks.RunAsync(root);
 Console.WriteLine($"Все проверки приложения пройдены. Артефакты: {root}");
 

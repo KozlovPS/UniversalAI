@@ -12,7 +12,8 @@ public static class BenchmarkCommand
         new("day10", "Три стратегии контекста и независимые ветки", Day10ContextBenchmark.RunAsync),
         new("day11", "Три слоя памяти: состав, токены и пошаговая очистка", Day11MemoryLayersBenchmark.RunAsync),
         new("day12", "Персонализация: профили, пополнение и устойчивость", Day12PersonalizationBenchmark.RunAsync),
-        new("day13", "Состояние задачи: автомат, паузы и контролируемые переходы", Day13TaskStateBenchmark.RunAsync)
+        new("day13", "Состояние задачи: автомат, паузы и контролируемые переходы", Day13TaskStateBenchmark.RunAsync),
+        new("day14", "Инварианты: проверка решений кодом и 8 попыток обхода", Day14InvariantsBenchmark.RunAsync)
     ];
 
     public static async Task<int> RunAsync(string[] args)
@@ -41,7 +42,7 @@ public static class BenchmarkCommand
             return await Entries[0].Run(args);
         }
 
-        Console.Error.WriteLine($"Неизвестный бенч '{args[0]}'. Выберите day3, day4, day5, day9, day10, day11, day12 или day13.");
+        Console.Error.WriteLine($"Неизвестный бенч '{args[0]}'. Выберите day3, day4, day5, day9, day10, day11, day12, day13 или day14.");
         PrintHelp();
         return 2;
     }
@@ -55,7 +56,7 @@ public static class BenchmarkCommand
     {
         Console.WriteLine("""
             Запуск бенчей:
-              dotnet run -- --benchmark [day3|day4|day5|day9|day10|day11|day12|day13] [параметры]
+              dotnet run -- --benchmark [day3|day4|day5|day9|day10|day11|day12|day13|day14] [параметры]
 
             Если день не указан, запускается Day-3.
             Для параметров конкретного теста используйте его --help:
@@ -67,6 +68,7 @@ public static class BenchmarkCommand
               dotnet run -- --benchmark day11 --help
               dotnet run -- --benchmark day12 --help
               dotnet run -- --benchmark day13 --help
+              dotnet run -- --benchmark day14 --help
 
             Доступные бенчи:
             """);

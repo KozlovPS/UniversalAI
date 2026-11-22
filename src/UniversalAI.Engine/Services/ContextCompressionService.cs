@@ -45,6 +45,7 @@ public sealed class ContextCompressionService(IContextMemoryStore conversations)
         string? currentUserText = null)
     {
         var memory = await PrepareMemoryAsync(conversation, history, provider, cancellationToken, force, currentUserText);
+        if (!ConversationModules.Resolve(conversation).Personalization) return memory;
         var profile = Context.UserProfileMemory.Parse(conversation.UserProfileJson);
         if (!profile.Enabled) return memory;
         ChatResult? profileCall = null;

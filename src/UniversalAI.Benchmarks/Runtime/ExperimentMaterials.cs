@@ -21,6 +21,30 @@ public static class BenchmarkMaterialsCatalog
     public static ExperimentMaterials Create(BenchmarkDefinition definition)
     {
         var materials = new ExperimentMaterials { Title = definition.Name, Goal = definition.Description };
+        if (definition.Id == "day14")
+        {
+            materials = materials with
+            {
+                AssignmentSource = "DAYS.md · День 14 · 22.11.2026",
+                Assignment = """
+                    День 14. Инварианты и ограничения состояния
+
+                    Добавьте в ассистента инварианты, которые он не имеет права нарушать.
+                    Примеры: выбранная архитектура, принятые технические решения, ограничения по стеку, бизнес-правила.
+                    Инварианты хранятся отдельно от диалога. Ассистент явно учитывает их в рассуждениях,
+                    отказывается предлагать нарушающие решения. Нарушение проверяется кодом до выдачи ответа.
+                    Изменение — только явной командой, с фиксацией прежнего и нового значения.
+                    Проверить конфликт, объяснение отказа и 5–10 разных попыток обхода; посчитать прошедшие попытки.
+                    Результат: ассистент, который работает в рамках заданных инвариантов.
+                    """,
+                Plan = ["Задать четыре отдельных инварианта явными командами.", "Получить совместимый контрольный ответ.",
+                    "Проверить 8 разных попыток обхода без изменения правил.", "Явно заменить C# на Rust и проверить новый ответ/журнал."]
+            };
+            materials.Groups.Add(new("Правила", "Фиксированные разрешённые значения решений. Произвольный текст модели не публикуется.",
+                Day14InvariantsBenchmark.Commands.Select(c => new ExperimentMaterialItem("Команда", c)).ToList()));
+            materials.Groups.Add(new("Попытки обхода", "Ожидается отказ или разрешённая альтернатива; состояние неизменно.",
+                Day14InvariantsBenchmark.Attacks.Select((a, i) => new ExperimentMaterialItem($"{i + 1}", a)).ToList()));
+        }
         if (definition.Id is "day3" or "day5")
         {
             materials = materials with { Plan = definition.Id == "day5"

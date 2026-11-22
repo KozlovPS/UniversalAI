@@ -8,12 +8,17 @@ public sealed class ExperimentDocuments
     public sealed record Outcome(string Label, int Passed, int Total, string Note);
     public ExperimentMaterials Materials { get; private set; } = new();
     public bool HasSavedMaterials { get; private set; }
+    public bool IsPreview { get; private set; }
     public bool? ReportComplete { get; private set; }
     public string? ReportText { get; private set; }
     public string? ReportFile { get; private set; }
     public ExperimentConclusion Conclusion { get; private set; } = ExperimentConclusion.Empty;
     public List<Outcome> Outcomes { get; } = [];
     public List<string> Notices { get; } = [];
+    public static ExperimentDocuments Preview(BenchmarkDefinition definition) => new()
+    {
+        Materials = BenchmarkMaterialsCatalog.Create(definition), IsPreview = true
+    };
     private static JsonElement Value(JsonElement item, string name) => item.ValueKind == JsonValueKind.Object
         ? item.EnumerateObject().FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase)).Value : default;
     private static string Text(JsonElement item, string name) => Value(item, name) is { ValueKind: JsonValueKind.String } v ? v.GetString() ?? "" : "";
@@ -28,7 +33,7 @@ public sealed class ExperimentDocuments
         async Task<string?> Read(string name)
         {
             if (!artifacts.Contains(name)) return null;
-            try { return await File.ReadAllTextAsync(await store.ArtifactPathAsync(run.Id, name, ct), ct); }
+            try { return await SnapshotFile.ReadAllTextAsync(await store.ArtifactPathAsync(run.Id, name, ct), ct); }
             catch (IOException) { doc.Notices.Add($"Файл {name} обновляется. Отображены доступные данные."); return null; }
         }
         if (await Read("experiment-materials.json") is { } saved)
@@ -82,6 +87,23 @@ public sealed class ExperimentDocuments
             foreach (var group in workflow.Observations.GroupBy(o => o.Group))
                 doc.Outcomes.Add(new(group.Key, group.Count(o => o.Passed), group.Count(),
                     $"Выбор действия моделью: {group.Count(o => !o.Input.StartsWith("/task ") && o.IntentMatched)}/{group.Count(o => !o.Input.StartsWith("/task "))} · Отказов: {group.Count(o => !o.Turn.Allowed)} · Состояние после отказов сохранено: {group.All(o => o.StatePreservedOnDenial)}"));
+        }
+        if (view.Invariants is { } invariants)
+        {
+            doc.ReportComplete = invariants.Completed;
+            foreach (var group in invariants.Observations.GroupBy(o => o.Group))
+            {
+                string label = group.Key switch
+                {
+                    "setup" => "Задание инвариантов", "control" => "Совместимый запрос",
+                    "attacks" => "Попытки обхода", "change" => "Явная замена правила",
+                    "updated" => "Ответ после замены", _ => group.Key
+                };
+                doc.Outcomes.Add(new(label, group.Count(o => o.Passed), group.Count(),
+                    group.Key == "attacks"
+                        ? $"Проверено попыток: {invariants.Attempts}; опубликовано нарушений: {invariants.Bypasses}; отказов модели: {invariants.ModelRefusals}; блокировок кодом: {invariants.CodeBlocks}."
+                        : "Сохранённые оценки шагов; ответы повторно не оцениваются."));
+            }
         }
         foreach (var result in Array(report, "Results"))
         {

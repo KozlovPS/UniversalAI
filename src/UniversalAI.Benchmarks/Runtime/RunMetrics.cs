@@ -20,7 +20,7 @@ public sealed class RunMetricsReader(FileRunStore store)
         decimal cost = 0; double milliseconds = 0; bool usageComplete = true, costComplete = true;
         var pricingPath = Path.Combine(store.GetDirectory(id), "pricing.json");
         var pricing = File.Exists(pricingPath)
-            ? JsonSerializer.Deserialize<PricingCatalog>(await File.ReadAllTextAsync(pricingPath, ct), FileRunStore.Json)!
+            ? JsonSerializer.Deserialize<PricingCatalog>(await SnapshotFile.ReadAllTextAsync(pricingPath, ct), FileRunStore.Json)!
             : PricingCatalog.Default;
         // A writer may be appending a record while the UI refreshes.
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);

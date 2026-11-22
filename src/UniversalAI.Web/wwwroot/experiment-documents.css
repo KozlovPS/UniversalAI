@@ -51,3 +51,4 @@
 .report-conclusion p{margin:12px 0 0}.report-conclusion .conclusion-finding{font-size:clamp(16px,2vw,20px);line-height:1.65;color:#edf8f6}
 .report-conclusion .conclusion-evidence{font-size:14px;color:#d1eade}.report-conclusion .conclusion-scope{font-size:12px;color:#bcd1d5;border-top:1px solid #617e7e;padding-top:13px}
 .report-conclusion.is-provisional{background:#464a4e;border-color:#a39472;border-top-color:#e8c88d}.report-conclusion .conclusion-status{font-size:13px;color:#ffe2ad}
+.experiment-preview-content{min-width:0}.experiment-preview-content>.screen-tabs{margin-bottom:20px;padding-left:0}.experiment-launch{background:#426b69!important;border-color:#87c8b7!important;color:#d1fff0!important}.playback-controls{flex-wrap:wrap}.experiment-preparation>.stack{align-self:start;position:sticky;top:20px}@media(max-width:780px){.experiment-preparation>.stack{position:static}.experiment-preview-content{padding:16px}}

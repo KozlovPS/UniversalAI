@@ -16,6 +16,7 @@
     <div class="playback-bar" aria-label="Управление плавным просмотром">
         <div class="playback-now"><span class="playback-orbit @(Playback.Playing && !Playback.ShowingAll ? "is-playing" : "")">@(Playback.ShowingAll ? "≡" : "▶")</span><div><span class="workbench-eyebrow">@PlaybackStatus</span><h3>@(CurrentStep?.Title ?? "Подготовка эксперимента")</h3></div><span class="playback-position" title="Показанные запросы / записанные запросы">@Playback.ShownResults <span>/ @Playback.Total</span></span></div>
         <div class="playback-controls">
+            @LaunchAction
             <button class="screen-button playback-primary" aria-label="@PlayLabel" disabled="@(!string.IsNullOrWhiteSpace(Search))" @onclick="TogglePlayback">@(Playback.Playing && !Playback.ShowingAll && !Playback.AtEnd ? "Ⅱ Пауза" : "▶ Смотреть")</button>
             <button class="screen-button" aria-label="Следующий шаг" title="Показать следующий вопрос, ответ или оценку" disabled="@(!CanAdvance)" @onclick="Next">Шаг →</button>
             <label class="playback-speed"><span class="sr-only">Скорость просмотра</span><select value="@Playback.Speed.ToString(CultureInfo.InvariantCulture)" @onchange="ChangeSpeed"><option value="0.5">×0,5</option><option value="1">×1</option><option value="2">×2</option></select></label>
@@ -81,6 +82,7 @@
 </div>
 
 @code {
+    [Parameter] public RenderFragment? LaunchAction { get; set; }
     [Parameter, EditorRequired] public ExperimentViewData Data { get; set; } = new();
     [Parameter] public ExperimentPlayback Playback { get; set; } = new();
     [Parameter] public bool EnablePlayback { get; set; } = true;

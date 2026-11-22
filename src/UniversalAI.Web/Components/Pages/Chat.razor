@@ -4,7 +4,7 @@
 @inject IWorkspaceClient Workspace
 
 <PageTitle>Диалоги — UniversalAI</PageTitle>
-<div class="eyebrow">АГЕНТЫ И КОНТЕКСТ</div><div class="page-heading"><div><h1>Диалоги</h1><p class="muted">Все разговоры, сообщения и память в одном месте.</p></div><button @onclick="New" disabled="@Unavailable">Новый диалог +</button></div>
+<div class="eyebrow">ВАШИ РАЗГОВОРЫ</div><div class="page-heading"><div><h1>Диалоги</h1><p class="muted">Просто напишите сообщение. Дополнительные возможности подключаются по желанию.</p></div><button @onclick="New" disabled="@Unavailable">Новый диалог +</button></div>
 @if (_error != null) { <p class="alert" role="alert">@_error</p> }
 @if (_deleteTarget is { } target)
 {
@@ -24,13 +24,36 @@
     <header class="panel chat-conversation-heading"><div><span class="eyebrow">ОТКРЫТЫЙ ДИАЛОГ</span><h2>@_current.Title</h2><p>@_total сообщений · @_current.Model</p></div><div class="actions"><button class="secondary" disabled="@Unavailable" @onclick="Branch">Создать ветку</button><button class="secondary" disabled="@Unavailable" @onclick="RefreshCurrent">Обновить</button></div></header>
     <details class="panel chat-settings"><summary>Настройки диалога <span>@_current.MemoryStrategy · @_current.AgentId</span></summary>
     <section class="stack">
-        <div class="form-row"><label>Подключение<select @bind="_provider" disabled="@Unavailable" @bind:after="ProviderChanged">@foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }</select></label><label>Агент<select @bind="_agent" disabled="@Unavailable">@foreach (var a in _agents) { <option value="@a.Id">@a.Name</option> }</select></label><label>Память<select @bind="_memory" disabled="@Unavailable"><option>Summary</option><option>SlidingWindow</option><option>StickyFacts</option><option>Layered</option></select></label></div>
+        <div class="form-row"><label>Подключение<select @bind="_provider" disabled="@Unavailable" @bind:after="ProviderChanged">@foreach (var p in _providers) { <option value="@p.Id">@p.Name</option> }</select></label><label>Ответы<select @bind="_agent" disabled="@Unavailable">@foreach (var a in _agents.Where(a => a.Id is "direct" or "tools")) { <option value="@a.Id">@a.Name</option> }</select></label><label>Память<select @bind="_memory" disabled="@Unavailable"><option>Summary</option><option>SlidingWindow</option><option>StickyFacts</option><option>Layered</option></select></label></div>
         <div class="form-row"><label>Модель<input @bind="_model" disabled="@Unavailable" /></label><label>Температура<input type="number" step="0.1" min="0" max="2" @bind="_temperature" disabled="@Unavailable" /></label><label>Лимит ответа<input type="number" min="1" @bind="_maxTokens" disabled="@Unavailable" /></label></div>
         <details><summary>Параметры контекста</summary><div class="form-row"><label>Последние сообщения<input type="number" min="2" @bind="_keep" /></label><label>Пакет summary<input type="number" min="1" @bind="_batch" /></label><label class="check"><input type="checkbox" @bind="_enabled" /> Память включена</label></div><label>Системный промпт<textarea rows="3" @bind="_prompt"></textarea></label></details>
         <div><button class="secondary" disabled="@Unavailable" @onclick="Save">Сохранить настройки</button></div>
     </section>
     </details>
-    <TaskStatePanel @key="_current.Id" State="_current.TaskState" Busy="Unavailable" Command="TaskCommand" />
+    <details class="panel chat-modules" @key="_current.Id"><summary>Возможности диалога <span>@ModuleDescription</span></summary>
+    <p class="muted">Для обычного разговора ничего подключать не нужно. Отключение сохраняет настройки и результаты модуля — к ним можно вернуться позже.</p>
+    <div class="chat-module-list">
+        <div class="chat-module-card"><div><strong>Задачи</strong><p>План, утверждение, выполнение и проверка результата.</p></div><button class="secondary" disabled="@Unavailable" aria-pressed="@Modules.Tasks" @onclick='() => ToggleModule("tasks")'>@(Modules.Tasks ? "Отключить задачи" : "Подключить задачи")</button></div>
+        <div class="chat-module-card"><div><strong>Персонализация</strong><p>Ваши предпочтения к стилю и подробности ответов.</p></div><button class="secondary" disabled="@Unavailable" aria-pressed="@Modules.Personalization" @onclick='() => ToggleModule("profile")'>@(Modules.Personalization ? "Отключить персонализацию" : "Подключить персонализацию")</button></div>
+        <div class="chat-module-card"><div><strong>Инварианты</strong><p>Строгая проверка разрешённых решений. Этот режим имеет приоритет над задачами и свободным чатом.</p></div><button class="secondary" disabled="@Unavailable" aria-pressed="@Modules.Invariants" @onclick='() => ToggleModule("invariants")'>@(Modules.Invariants ? "Отключить инварианты" : "Подключить инварианты")</button></div>
+    </div>
+    @if (Modules.Tasks)
+    {
+        @if (Modules.Invariants) { <p class="callout">Задача сохранена. Для её выполнения отключите строгий режим инвариантов.</p> }
+        <TaskStatePanel @key="_current.Id" State="_current.TaskState" Busy="@(Unavailable || Modules.Invariants)" Command="TaskCommand" />
+    }
+    @if (Modules.Invariants)
+    {
+    <details class="panel"><summary>Инварианты и журнал изменений</summary>
+        <div class="form-row"><label>Ключ правила<input @bind="_invariantKey" placeholder="stack" disabled="@Unavailable" /></label><label>Разрешённое значение<input @bind="_invariantValue" placeholder="C#" disabled="@Unavailable" /></label></div>
+        <button disabled="@(Unavailable || string.IsNullOrWhiteSpace(_invariantKey) || string.IsNullOrWhiteSpace(_invariantValue))" @onclick="SaveInvariant">Сохранить правило</button>
+        <p>Задайте в поле сообщения: <code>/invariant set stack = C#</code>. Просмотр: <code>/invariant list</code>, история замен: <code>/invariant audit</code>.</p>
+        <p>Пока модуль подключён, ответы ограничены проверенными решениями или отказом. Отключение в «Возможностях диалога» возвращает обычный чат и фиксируется в журнале. Правила сохраняются.</p>
+        <pre>@_current.InvariantStateJson</pre>
+    </details>
+    }
+    @if (Modules.Personalization)
+    {
     <section class="panel stack">
         <h2>Профиль пользователя</h2>
         <p class="muted">Профиль действует в этом диалоге при любой стратегии памяти. Укажите имя для включения. Ветка получает независимую копию. Очистка истории сохраняет профиль, полный сброс удаляет его.</p>
@@ -41,6 +64,7 @@
         <div class="actions"><button disabled="@Unavailable" @onclick="SaveProfile">Сохранить профиль</button><button class="secondary" disabled="@Unavailable" @onclick="ClearProfile">Удалить профиль</button></div>
         <details><summary>Сохранённый профиль и источники</summary><pre>@_current.UserProfileJson</pre></details>
     </section>
+    }
     @if (_current.MemoryStrategy == "Layered")
     {
         <section class="panel stack">
@@ -54,6 +78,8 @@
             <div class="actions"><button disabled="@Unavailable" @onclick='() => EditLayer("long", false)'>Сохранить долговременную память</button><button class="secondary" disabled="@Unavailable" @onclick='() => EditLayer("long", true)'>Очистить долговременную память</button></div>
         </section>
     }
+    </details>
+    <p class="chat-mode" role="status">@ModuleDescription</p>
     <section class="panel messages" aria-live="polite">
         <div class="section-heading"><h2>Сообщения</h2><span class="muted">@_messages.Count / @_total</span></div>
         @if (_total > _messages.Count) { <button class="secondary" disabled="@Unavailable" @onclick="LoadEarlier">Показать предыдущие сообщения (@(_total - _messages.Count))</button> }
@@ -75,6 +101,11 @@ else { <section class="panel empty"><span>◌</span><h2>Ваше простра�
     private ConversationInfo? _current;
     private AgentTurnResult? _turn;
     private string _provider = "", _model = "", _agent = "direct", _memory = "Summary", _prompt = "", _input = "";
+    private string _invariantKey = "", _invariantValue = "";
+    private ConversationModules Modules => _current?.Modules ?? new();
+    private string ModuleDescription => Modules.Invariants ? "Строгие инварианты" :
+        Modules.Tasks && Modules.Personalization ? "Задачи · Персонализация" :
+        Modules.Tasks ? "Задачи" : Modules.Personalization ? "Диалог · Персонализация" : "Обычный диалог";
     private int _keep = 6, _batch = 10, _total;
     private int? _maxTokens;
     private string _profileName = "", _profileLength = "unspecified", _profileCode = "unspecified", _profileTone = "unspecified", _profileConstraints = "";
@@ -90,9 +121,37 @@ else { <section class="panel empty"><span>◌</span><h2>Ваше простра�
     private string _workingJson = "{}", _longTermJson = "{}";
     private CancellationTokenSource? _request;
     protected override async Task OnInitializedAsync() { try { _conversations = await Workspace.ListAsync(); _providers = await Workspace.ProvidersAsync(); _agents = await Workspace.AgentsAsync(); if (_conversations.Count > 0) await Open(_conversations[0].Id); } catch (Exception e) { _error = e.Message; } }
-    private void Fill(ConversationInfo c) { _current = c; _provider = c.ProviderProfileId ?? _providers.FirstOrDefault()?.Id ?? ""; _model = c.Model; _agent = c.AgentId; _memory = c.MemoryStrategy; _keep = c.Keep; _batch = c.Batch; _enabled = c.CompressionEnabled; _temperature = c.Temperature; _maxTokens = c.MaxTokens; _prompt = c.SystemPrompt; _workingJson = c.WorkingMemoryJson; _longTermJson = c.FactsJson;
+    private void Fill(ConversationInfo c) { _current = c; _provider = c.ProviderProfileId ?? _providers.FirstOrDefault()?.Id ?? ""; _model = c.Model; _agent = c.AgentId is "task" or "invariants" ? "direct" : c.AgentId; _memory = c.MemoryStrategy; _keep = c.Keep; _batch = c.Batch; _enabled = c.CompressionEnabled; _temperature = c.Temperature; _maxTokens = c.MaxTokens; _prompt = c.SystemPrompt; _workingJson = c.WorkingMemoryJson; _longTermJson = c.FactsJson;
         var p = UniversalAI.Services.Context.UserProfileMemory.Parse(c.UserProfileJson);
         _profileName = p.Name; _profileLength = p.Length; _profileCode = p.Code; _profileTone = p.Tone; _profileConstraints = p.Constraints; _profileLearn = p.LearnFromDialogue;
+    }
+    private async Task ToggleModule(string module)
+    {
+        if (_current == null || Unavailable) return;
+        _busy = true; _error = null;
+        try
+        {
+            var modules = module switch
+            {
+                "tasks" => Modules with { Tasks = !Modules.Tasks },
+                "profile" => Modules with { Personalization = !Modules.Personalization },
+                _ => Modules with { Invariants = !Modules.Invariants }
+            };
+            string? profileJson = null;
+            if (modules.Personalization && !Modules.Personalization && string.IsNullOrWhiteSpace(_profileName))
+            {
+                var profile = UniversalAI.Services.Context.UserProfileMemory.Parse(_current.UserProfileJson);
+                profileJson = JsonSerializer.Serialize(profile with { Name = "Профиль диалога" });
+            }
+            Fill(await Workspace.UpdateAsync(_current.Id, new(Modules: modules, UserProfileJson: profileJson)));
+            _conversations = await Workspace.ListAsync();
+        }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
+    private async Task SaveInvariant()
+    {
+        await TaskCommand($"/invariant set {_invariantKey.Trim()} = {_invariantValue.Trim()}");
     }
     private async Task SaveProfile()
     {
@@ -137,7 +196,7 @@ else { <section class="panel empty"><span>◌</span><h2>Ваше простра�
     {
         if (_opening) return;
         _opening = true; _error = null; _deleteTarget = null;
-        try { var conversation = await Workspace.GetAsync(id); var first = await Workspace.MessagesAsync(id, limit: 1); var page = await Workspace.MessagesAsync(id, Math.Max(0, first.Total - 100)); Fill(conversation); _total = page.Total; _messages = page.Items.ToList(); _turn = null; }
+        try { var conversation = await Workspace.GetAsync(id); var first = await Workspace.MessagesAsync(id, limit: 1); var page = await Workspace.MessagesAsync(id, Math.Max(0, first.Total - 100)); if (_current?.Id != id) { _invariantKey = ""; _invariantValue = ""; } Fill(conversation); _total = page.Total; _messages = page.Items.ToList(); _turn = null; }
         catch (Exception e) { _error = e.Message; }
         finally { _opening = false; }
     }
@@ -183,7 +242,7 @@ else { <section class="panel empty"><span>◌</span><h2>Ваше простра�
     private async Task LoadEarlier() { if (_current == null) return; try { var page = await Workspace.MessagesAsync(_current.Id, Math.Max(0, _total - _messages.Count - 100), Math.Min(100, _total - _messages.Count)); _messages.InsertRange(0, page.Items); } catch (Exception e) { _error = e.Message; } }
     private void ProviderChanged() { var p = _providers.First(p => p.Id == _provider); _model = p.DefaultModel; if (!p.SupportsTools) _agent = "direct"; }
     private async Task Save() { try { _error = null; await SaveCore(); } catch (Exception e) { _error = e.Message; } }
-    private async Task SaveCore() { if (_current == null) return; Fill(await Workspace.UpdateAsync(_current.Id, new(Model: _model, AgentId: _agent, ProviderId: _provider, MemoryStrategy: _memory, CompressionEnabled: _enabled, Keep: _keep, Batch: _batch, Temperature: _temperature, MaxTokens: _maxTokens, ClearMaxTokens: _maxTokens == null, SystemPrompt: _prompt))); }
+    private async Task SaveCore() { if (_current == null) return; Fill(await Workspace.UpdateAsync(_current.Id, new(Model: _model, AgentId: _agent, ProviderId: _provider, MemoryStrategy: _memory, CompressionEnabled: _enabled, Keep: _keep, Batch: _batch, Temperature: _temperature, MaxTokens: _maxTokens, ClearMaxTokens: _maxTokens == null, SystemPrompt: _prompt, Modules: Modules))); }
     private async Task Branch() { if (_current == null || Unavailable) return; _busy = true; try { var c = await Workspace.BranchAsync(_current.Id, _current.Title + " (ветка)"); _conversations = await Workspace.ListAsync(); await Open(c.Id); } catch (Exception e) { _error = e.Message; } finally { _busy = false; } }
     private async Task Send()
     {

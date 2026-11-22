@@ -37,7 +37,7 @@
         @if (_structured)
         {
             @if (Data.Calls.Count == 0 && !string.IsNullOrWhiteSpace(Log)) { <div class="evidence-notice">Структурированные запросы ещё не записаны или отсутствуют в этом архиве. <button class="text-button" @onclick="() => SetView(false)">Открыть полный исходный журнал →</button></div> }
-            <ExperimentWorkbench @key="Run.Id" Data="Data" Playback="_playback" Search="@_search" Follow="_follow" Active="Active" />
+            <ExperimentWorkbench @key="Run.Id" Data="Data" Playback="_playback" Search="@_search" Follow="_follow" Active="Active" LaunchAction="LaunchAction" />
         }
         else
         {
@@ -85,6 +85,7 @@
     [Parameter] public RenderFragment? Results { get; set; }
     [Parameter] public RenderFragment? Settings { get; set; }
     [Parameter] public RenderFragment? Actions { get; set; }
+    [Parameter] public RenderFragment? LaunchAction { get; set; }
     private sealed record Line(int Number, string Text, string ReadableText, string Kind);
     private List<Line> _lines = [];
     private string _source = "", _search = "", _tab = "log", _runId = "";

@@ -40,7 +40,7 @@
         try { _left = await Store.GetAsync(LeftId); _right = await Store.GetAsync(RightId); _lm = await Metrics.ReadAsync(LeftId); _rm = await Metrics.ReadAsync(RightId); _leftReport = await Report(LeftId); _rightReport = await Report(RightId); }
         catch (Exception e) { _error = e.Message; }
     }
-    private async Task<string> Report(string id) { var path = Path.Combine(Store.GetArtifactsDirectory(id), "report.md"); return File.Exists(path) && new FileInfo(path).Length <= 1_048_576 ? await File.ReadAllTextAsync(path) : "Отчёт пока недоступен."; }
+    private async Task<string> Report(string id) { var path = Path.Combine(Store.GetArtifactsDirectory(id), "report.md"); return File.Exists(path) && new FileInfo(path).Length <= 1_048_576 ? await SnapshotFile.ReadAllTextAsync(path) : "Отчёт пока недоступен."; }
     private static string Count(long? value) => value?.ToString("N0") ?? "Н/д";
     private static string Cost(decimal? value) => value?.ToString("F6") + (value.HasValue ? " ₽" : "Н/д");
 }

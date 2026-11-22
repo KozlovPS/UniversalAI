@@ -17,6 +17,7 @@ public sealed class ExperimentViewData
     public Day11MemoryLayersBenchmark.Report? Layers { get; private set; }
     public Day12PersonalizationBenchmark.Report? Personalization { get; private set; }
     public Day13TaskStateBenchmark.Report? TaskWorkflow { get; private set; }
+    public Day14InvariantsBenchmark.Report? Invariants { get; private set; }
     public ExperimentPresentation? Presentation { get; private set; }
     public List<string> Notices { get; } = [];
     private static readonly JsonSerializerOptions Json = new(FileRunStore.Json);
@@ -34,7 +35,7 @@ public sealed class ExperimentViewData
         async Task<T?> Read<T>(string name)
         {
             if (!artifacts.Contains(name)) return default;
-            try { return JsonSerializer.Deserialize<T>(await File.ReadAllTextAsync(await store.ArtifactPathAsync(run.Id, name), ct), Json); }
+            try { return JsonSerializer.Deserialize<T>(await SnapshotFile.ReadAllTextAsync(await store.ArtifactPathAsync(run.Id, name), ct), Json); }
             catch (Exception e) when (e is JsonException or IOException)
             { view.Notices.Add($"{name}: снимок временно недоступен. Откройте исходный журнал или обновите экран."); return default; }
         }
@@ -63,6 +64,8 @@ public sealed class ExperimentViewData
             view.Personalization = await Read<Day12PersonalizationBenchmark.Report>("report.json");
         if (run.BenchmarkId == "day13")
             view.TaskWorkflow = await Read<Day13TaskStateBenchmark.Report>("report.json");
+        if (run.BenchmarkId == "day14")
+            view.Invariants = await Read<Day14InvariantsBenchmark.Report>("report.json");
 
         if (run.BenchmarkId == "day10")
         {
@@ -100,6 +103,7 @@ public sealed class ExperimentViewData
                 var observation = view.Layers?.Observations.ElementAtOrDefault(request.Number - 1);
                 var preference = view.Personalization?.Observations.FirstOrDefault(o => o.CallNumber == request.Number);
                 var task = view.TaskWorkflow?.Observations.FirstOrDefault(o => o.CallNumbers.Contains(request.Number));
+                var invariant = view.Invariants?.Observations.Where(o => o.Turn.Request != null).ElementAtOrDefault(request.Number - 1);
                 // Day-11 has exactly six independent probes per saved stage; no memory API calls.
                 var stage = run.BenchmarkId == "day11"
                     ? view.Layers?.Snapshots.ElementAtOrDefault((request.Number - 1) / 6)?.Stage ?? "execution"
@@ -110,7 +114,8 @@ public sealed class ExperimentViewData
                 view.Calls.Add(new(request.Number, stage, request.Kind, request.Request, response?.Response,
                     response?.Error, response?.Milliseconds / 1000.0, observation?.Expected ?? (preference == null ? null :
                         $"Объём: {preference.ExpectedProfile.Length}; код: {preference.ExpectedProfile.Code}; тон: {preference.ExpectedProfile.Tone}") ??
-                        (task == null ? null : $"Разрешено={task.ExpectedAllowed}; этап={task.ExpectedStage}; пауза={task.ExpectedPaused}"), observation?.Passed ?? preference?.Assessment.Passed ?? task?.Passed));
+                        (task == null ? null : $"Разрешено={task.ExpectedAllowed}; этап={task.ExpectedStage}; пауза={task.ExpectedPaused}") ?? invariant?.Expected,
+                        observation?.Passed ?? preference?.Assessment.Passed ?? task?.Passed ?? invariant?.Passed));
             }
             if (view.Layers != null)
                 foreach (var snapshot in view.Layers.Snapshots)

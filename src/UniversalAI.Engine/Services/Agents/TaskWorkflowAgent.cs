@@ -37,6 +37,8 @@ public sealed class TaskWorkflowAgent(ConversationService conversations, IProvid
         prepared ??= new([], TokenUsageCalculator.EstimateMessages(history), 0, 0, 0, false, null);
         if (turn.Allowed && !ReferenceEquals(turn.Before, turn.After))
             prepared = prepared with { PendingTaskState = turn.After, ClearTaskState = turn.After == null };
+        if (turn.Allowed && content.StartsWith("/task ", StringComparison.OrdinalIgnoreCase))
+            c.ModulesJson = System.Text.Json.JsonSerializer.Serialize(ConversationModules.Resolve(c) with { Tasks = turn.After != null });
         await conversations.SaveMessagesAsync(conversationId, saved, cancellationToken, prepared);
         var traces = turn.Calls.Select((call, index) => new AgentModelCallTrace(index + 1,
             call.Response.FinishReason, call.Response.PromptTokens, call.Response.CompletionTokens,

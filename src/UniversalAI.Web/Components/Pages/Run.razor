@@ -13,6 +13,7 @@
 {
     <ExperimentScreen Run="_run" Data="_view" Log="@_log" Duration="@Duration" ArtifactCount="_artifacts.Count" UpdatedAt="_updatedAt" RefreshError="@_error" ShowMemory='@(_run.BenchmarkId == "day11")'>
         <Actions>@if (_run.Status is RunStatus.Running or RunStatus.Queued) { <button class="screen-button" @onclick="Cancel">Остановить</button> }<button class="screen-button screen-refresh" @onclick="Refresh">Обновить</button></Actions>
+        <LaunchAction>@if (_run.Status is not (RunStatus.Running or RunStatus.Queued)) { <a class="screen-button experiment-launch" href="@($"/experiments/{_run.BenchmarkId}?fromRun={_run.Id}")" title="Посмотреть задание и сценарий перед новым запуском">Запустить эксперимент</a> }</LaunchAction>
         <Memory>@if (_run.BenchmarkId == "day11") { <Day11Progress Report="_day11" /> } else { <p>Дополнительный разбор доступен в журнале и сохранённых отчётах.</p> }</Memory>
         <Report><ExperimentReport Run="_run" Documents="_documents" Metrics="_metrics" /></Report>
         <Lesson><ExperimentLesson Documents="_documents" BenchmarkId="@_run.BenchmarkId" /></Lesson>
@@ -73,7 +74,7 @@
         {
             string path = await Store.ArtifactPathAsync(Id, name);
             _previewName = name;
-            _preview = new FileInfo(path).Length > 1_048_576 ? "Файл больше 1 МБ. Скачайте его для просмотра." : await File.ReadAllTextAsync(path);
+            _preview = new FileInfo(path).Length > 1_048_576 ? "Файл больше 1 МБ. Скачайте его для просмотра." : await SnapshotFile.ReadAllTextAsync(path);
         }
         catch (Exception e) { _error = e.Message; }
     }

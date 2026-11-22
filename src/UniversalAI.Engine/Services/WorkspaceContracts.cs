@@ -9,7 +9,8 @@ public sealed record ConversationInfo(int Id, string Title, string Model, string
     DateTime UpdatedAt, string FactsJson, string? Summary, double? TopP = null,
     double? FrequencyPenalty = null, double? PresencePenalty = null, int? Seed = null,
     string? ReasoningEffort = null, int? ReasoningBudgetTokens = null, string WorkingMemoryJson = "{}",
-    string UserProfileJson = "{}", Tasks.TaskWorkflowState? TaskState = null);
+    string UserProfileJson = "{}", Tasks.TaskWorkflowState? TaskState = null, string InvariantStateJson = "{}",
+    ConversationModules? Modules = null);
 public sealed record CreateConversationRequest(string? Title = null, string? ProviderId = null,
     string? Model = null, string AgentId = "direct");
 public sealed record ConversationSettings(string? Model = null, string? AgentId = null,
@@ -20,7 +21,7 @@ public sealed record ConversationSettings(string? Model = null, string? AgentId 
     string? ReasoningEffort = null, int? ReasoningBudgetTokens = null,
     bool ClearReasoning = false, bool ResetGeneration = false,
     string? WorkingMemoryJson = null, string? LongTermMemoryJson = null, bool ClearShortTerm = false,
-    string? UserProfileJson = null, bool ClearMaxTokens = false);
+    string? UserProfileJson = null, bool ClearMaxTokens = false, ConversationModules? Modules = null);
 public sealed record SendMessageRequest(string Content);
 public sealed record MessagePage(IReadOnlyList<ChatMessage> Items, int Total, int Offset);
 public sealed record AgentInfo(string Id, string Name, string Description);

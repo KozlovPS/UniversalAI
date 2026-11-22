@@ -143,8 +143,7 @@ public static class Day13TaskStateBenchmark
         async Task AtomicAsync(string name, string content)
         {
             string path = Path.Combine(context.Directory, name);
-            await File.WriteAllTextAsync(path + ".tmp", content, CancellationToken.None);
-            File.Move(path + ".tmp", path, true);
+            await SnapshotFile.WriteAllTextAsync(path, content, CancellationToken.None);
         }
     }
     public static string Describe(TaskWorkflowState? state) => TaskStateMachine.Describe(state) + (state == null ? "" :
