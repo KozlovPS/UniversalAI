@@ -28,6 +28,15 @@ if (args.FirstOrDefault() == "--serve-fake")
     {
         using var body = await JsonDocument.ParseAsync(request.Body);
         string last = body.RootElement.GetProperty("messages").EnumerateArray().Last().GetProperty("content").GetString() ?? "";
+        var messages = body.RootElement.GetProperty("messages").EnumerateArray().Select(m => new ChatMessage
+            { Role = m.GetProperty("role").GetString()!, Content = m.GetProperty("content").GetString() ?? "" }).ToList();
+        if (messages.Any(m => m.Content == UniversalAI.Services.Context.UserProfileMemory.Instructions || m.Content.StartsWith("ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ")))
+        {
+            var result = Day12Checks.ProfileProvider.Respond(new ChatRequest { Messages = messages });
+            if (messages[0].Content == UniversalAI.Services.Context.UserProfileMemory.Instructions)
+                result.Content += "\n\n**Проверка:** извлечены только явные предпочтения.";
+            return Results.Json(new { choices = new[] { new { message = new { role = "assistant", content = result.Content }, finish_reason = "stop" } }, usage = new { prompt_tokens = 100, completion_tokens = 30, total_tokens = 130 } });
+        }
         string content = last.Contains("ANSWER", StringComparison.Ordinal) ? "ANSWER: 323" : "Тестовый ответ локального сервера.";
         return Results.Json(new { choices = new[] { new { message = new { role = "assistant", content }, finish_reason = "stop" } }, usage = new { prompt_tokens = 10, completion_tokens = 5, total_tokens = 15 } });
     });
@@ -198,6 +207,7 @@ Check((await workspace.ListAsync()).Count == 0 && (await store.ListAsync()).Coun
     "Изменение учебной схемы пересоздаёт только БД и сохраняет файлы прогонов");
 
 await Day11Checks.RunAsync(root);
+await Day12Checks.RunAsync(root);
 await ExperimentPresentationChecks.RunAsync(root);
 Console.WriteLine($"Все проверки приложения пройдены. Артефакты: {root}");
 

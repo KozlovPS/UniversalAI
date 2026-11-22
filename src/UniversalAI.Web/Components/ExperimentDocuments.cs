@@ -67,6 +67,14 @@ public sealed class ExperimentDocuments
                 doc.Materials.Groups.Add(new("Контрольные вопросы", "Эталоны из сохранённых наблюдений; после удаления источника ожидается НЕИЗВЕСТНО.", layers.Observations.DistinctBy(o => o.ProbeId).Select(o => new ExperimentMaterialItem(o.Layer, o.Question, o.Expected)).ToList()));
             }
         }
+        if (view.Personalization is { } personalization)
+        {
+            doc.ReportComplete = personalization.Completed;
+            foreach (var group in personalization.Observations.GroupBy(o => o.Stage))
+                doc.Outcomes.Add(new(group.Key == "stability" ? "Устойчивость · 10 вопросов" : $"Общий вопрос · {group.First().ProfileName}",
+                    group.Count(o => o.Assessment.Passed), group.Count(),
+                    $"Объём: {group.Count(o => o.Assessment.LengthPassed)}/{group.Count()} · Код: {group.Count(o => o.Assessment.CodePassed)}/{group.Count()} · Тон: {group.Count(o => o.Assessment.TonePassed)}/{group.Count()}"));
+        }
         foreach (var result in Array(report, "Results"))
             if (Number(result, "CorrectTasks") is { } passed && Number(result, "TaskCount") is { } total)
                 doc.Outcomes.Add(new(Text(result, "ModelId") is { Length: > 0 } model ? model : $"{Text(result, "StrategyLabel")} · {Text(result, "ReasoningLabel")}", passed, total,

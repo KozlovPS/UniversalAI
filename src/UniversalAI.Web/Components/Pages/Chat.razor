@@ -30,6 +30,16 @@
         <div><button class="secondary" disabled="@Unavailable" @onclick="Save">Сохранить настройки</button></div>
     </section>
     </details>
+    <section class="panel stack">
+        <h2>Профиль пользователя</h2>
+        <p class="muted">Профиль действует в этом диалоге при любой стратегии памяти. Укажите имя для включения. Ветка получает независимую копию. Очистка истории сохраняет профиль, полный сброс удаляет его.</p>
+        <div class="form-row"><label>Имя профиля<input @bind="_profileName" disabled="@Unavailable" /></label><label>Объём<select @bind="_profileLength" disabled="@Unavailable"><option value="unspecified">Не задан</option><option value="brief">Кратко (до 80 слов)</option><option value="detailed">Подробно (от 180 слов)</option></select></label></div>
+        <div class="form-row"><label>Примеры кода<select @bind="_profileCode" disabled="@Unavailable"><option value="unspecified">По задаче</option><option value="required">С кодом</option><option value="forbidden">Без кода</option></select></label><label>Тон<select @bind="_profileTone" disabled="@Unavailable"><option value="unspecified">Не задан</option><option value="formal">Формально, на Вы</option><option value="informal">Неформально, на ты</option></select></label></div>
+        <label>Дополнительные предпочтения<textarea rows="2" @bind="_profileConstraints" disabled="@Unavailable"></textarea></label>
+        <label class="check"><input type="checkbox" @bind="_profileLearn" disabled="@Unavailable" /> Пополнять профиль из моих явных предпочтений в диалоге (дополнительный запрос к модели на каждый ход)</label>
+        <div class="actions"><button disabled="@Unavailable" @onclick="SaveProfile">Сохранить профиль</button><button class="secondary" disabled="@Unavailable" @onclick="ClearProfile">Удалить профиль</button></div>
+        <details><summary>Сохранённый профиль и источники</summary><pre>@_current.UserProfileJson</pre></details>
+    </section>
     @if (_current.MemoryStrategy == "Layered")
     {
         <section class="panel stack">
@@ -64,7 +74,10 @@ else { <section class="panel empty"><span>◌</span><h2>Ваше простра�
     private ConversationInfo? _current;
     private AgentTurnResult? _turn;
     private string _provider = "", _model = "", _agent = "direct", _memory = "Summary", _prompt = "", _input = "";
-    private int _keep = 6, _batch = 10, _maxTokens = 10000, _total;
+    private int _keep = 6, _batch = 10, _total;
+    private int? _maxTokens;
+    private string _profileName = "", _profileLength = "unspecified", _profileCode = "unspecified", _profileTone = "unspecified", _profileConstraints = "";
+    private bool _profileLearn = true;
     private double _temperature = 0.7;
     private bool _enabled = true, _busy, _opening;
     private bool Unavailable => _busy || _opening;
@@ -76,7 +89,31 @@ else { <section class="panel empty"><span>◌</span><h2>Ваше простра�
     private string _workingJson = "{}", _longTermJson = "{}";
     private CancellationTokenSource? _request;
     protected override async Task OnInitializedAsync() { try { _conversations = await Workspace.ListAsync(); _providers = await Workspace.ProvidersAsync(); _agents = await Workspace.AgentsAsync(); if (_conversations.Count > 0) await Open(_conversations[0].Id); } catch (Exception e) { _error = e.Message; } }
-    private void Fill(ConversationInfo c) { _current = c; _provider = c.ProviderProfileId ?? _providers.FirstOrDefault()?.Id ?? ""; _model = c.Model; _agent = c.AgentId; _memory = c.MemoryStrategy; _keep = c.Keep; _batch = c.Batch; _enabled = c.CompressionEnabled; _temperature = c.Temperature; _maxTokens = c.MaxTokens; _prompt = c.SystemPrompt; _workingJson = c.WorkingMemoryJson; _longTermJson = c.FactsJson; }
+    private void Fill(ConversationInfo c) { _current = c; _provider = c.ProviderProfileId ?? _providers.FirstOrDefault()?.Id ?? ""; _model = c.Model; _agent = c.AgentId; _memory = c.MemoryStrategy; _keep = c.Keep; _batch = c.Batch; _enabled = c.CompressionEnabled; _temperature = c.Temperature; _maxTokens = c.MaxTokens; _prompt = c.SystemPrompt; _workingJson = c.WorkingMemoryJson; _longTermJson = c.FactsJson;
+        var p = UniversalAI.Services.Context.UserProfileMemory.Parse(c.UserProfileJson);
+        _profileName = p.Name; _profileLength = p.Length; _profileCode = p.Code; _profileTone = p.Tone; _profileConstraints = p.Constraints; _profileLearn = p.LearnFromDialogue;
+    }
+    private async Task SaveProfile()
+    {
+        if (_current == null || Unavailable) return;
+        _busy = true; _error = null;
+        try
+        {
+            var previous = UniversalAI.Services.Context.UserProfileMemory.Parse(_current.UserProfileJson);
+            var p = previous with { Name = _profileName, Length = _profileLength, Code = _profileCode, Tone = _profileTone, Constraints = _profileConstraints, LearnFromDialogue = _profileLearn, Evidence = [] };
+            Fill(await Workspace.UpdateAsync(_current.Id, new(UserProfileJson: JsonSerializer.Serialize(p))));
+        }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
+    private async Task ClearProfile()
+    {
+        if (_current == null || Unavailable) return;
+        _busy = true; _error = null;
+        try { Fill(await Workspace.UpdateAsync(_current.Id, new(UserProfileJson: "{}"))); }
+        catch (Exception e) { _error = e.Message; }
+        finally { _busy = false; }
+    }
     private async Task EditLayer(string layer, bool clear)
     {
         if (_current == null || _busy) return;
@@ -145,7 +182,7 @@ else { <section class="panel empty"><span>◌</span><h2>Ваше простра�
     private async Task LoadEarlier() { if (_current == null) return; try { var page = await Workspace.MessagesAsync(_current.Id, Math.Max(0, _total - _messages.Count - 100), Math.Min(100, _total - _messages.Count)); _messages.InsertRange(0, page.Items); } catch (Exception e) { _error = e.Message; } }
     private void ProviderChanged() { var p = _providers.First(p => p.Id == _provider); _model = p.DefaultModel; if (!p.SupportsTools) _agent = "direct"; }
     private async Task Save() { try { _error = null; await SaveCore(); } catch (Exception e) { _error = e.Message; } }
-    private async Task SaveCore() { if (_current == null) return; Fill(await Workspace.UpdateAsync(_current.Id, new(Model: _model, AgentId: _agent, ProviderId: _provider, MemoryStrategy: _memory, CompressionEnabled: _enabled, Keep: _keep, Batch: _batch, Temperature: _temperature, MaxTokens: _maxTokens, SystemPrompt: _prompt))); }
+    private async Task SaveCore() { if (_current == null) return; Fill(await Workspace.UpdateAsync(_current.Id, new(Model: _model, AgentId: _agent, ProviderId: _provider, MemoryStrategy: _memory, CompressionEnabled: _enabled, Keep: _keep, Batch: _batch, Temperature: _temperature, MaxTokens: _maxTokens, ClearMaxTokens: _maxTokens == null, SystemPrompt: _prompt))); }
     private async Task Branch() { if (_current == null || Unavailable) return; _busy = true; try { var c = await Workspace.BranchAsync(_current.Id, _current.Title + " (ветка)"); _conversations = await Workspace.ListAsync(); await Open(c.Id); } catch (Exception e) { _error = e.Message; } finally { _busy = false; } }
     private async Task Send()
     {

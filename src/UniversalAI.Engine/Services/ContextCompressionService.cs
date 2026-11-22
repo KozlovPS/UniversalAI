@@ -17,6 +17,10 @@ public sealed record PreparedContext(
 {
     public Dictionary<string, string>? PendingFacts { get; init; }
     public Context.MemoryLayerTokens? LayerTokens { get; init; }
+    public Context.UserProfile? PendingProfile { get; init; }
+    public ChatResult? ProfileCall { get; init; }
+    public int ProfileTokens { get; init; }
+    public string? ProfileResponseNotice { get; init; }
 }
 
 /// <summary>Builds model context without deleting the original conversation log.</summary>
@@ -37,6 +41,29 @@ public sealed class ContextCompressionService(IContextMemoryStore conversations)
         ConversationEntity conversation, IReadOnlyList<ChatMessage> history,
         IAIProvider provider, CancellationToken cancellationToken = default, bool force = false,
         string? currentUserText = null)
+    {
+        var memory = await PrepareMemoryAsync(conversation, history, provider, cancellationToken, force, currentUserText);
+        var profile = Context.UserProfileMemory.Parse(conversation.UserProfileJson);
+        if (!profile.Enabled) return memory;
+        ChatResult? profileCall = null;
+        string? profileResponseNotice = null;
+        if (currentUserText != null)
+            profile = await Context.UserProfileMemory.LearnAsync(profile, currentUserText, conversation.Model,
+                provider, cancellationToken, call => profileCall = call, notice => profileResponseNotice = notice);
+        var message = Context.UserProfileMemory.AsMessage(profile);
+        int tokens = TokenUsageCalculator.EstimateMessages([message]);
+        return memory with
+        {
+            Messages = [message, .. memory.Messages], PendingProfile = profile, ProfileCall = profileCall,
+            ProfileTokens = tokens, EffectiveHistoryTokens = memory.EffectiveHistoryTokens + tokens,
+            ProfileResponseNotice = profileResponseNotice
+        };
+    }
+
+    private async Task<PreparedContext> PrepareMemoryAsync(
+        ConversationEntity conversation, IReadOnlyList<ChatMessage> history,
+        IAIProvider provider, CancellationToken cancellationToken, bool force,
+        string? currentUserText)
     {
         int rawTokens = TokenUsageCalculator.EstimateMessages(history);
         if (!conversation.CompressionEnabled)
@@ -92,7 +119,6 @@ public sealed class ContextCompressionService(IContextMemoryStore conversations)
             ChatRequest request = new()
             {
                 Model = conversation.Model,
-                MaxTokens = 1600,
                 Temperature = 0,
                 Messages =
                 [

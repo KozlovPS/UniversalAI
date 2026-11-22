@@ -62,6 +62,9 @@ public sealed class WorkspaceCommandHandler(IWorkspaceClient workspace) : IConso
                     if (value.Length == 0) { Console.WriteLine((await workspace.GetAsync(id, cancellationToken)).MemoryStrategy); return true; }
                     update = new(MemoryStrategy: value.ToLowerInvariant() switch { "summary" => "Summary", "slidingwindow" or "window" => "SlidingWindow", "stickyfacts" or "facts" => "StickyFacts", "layered" => "Layered", _ => throw new ArgumentException("/memory Summary|SlidingWindow|StickyFacts|Layered") }); break;
                 case "/working": update = new(WorkingMemoryJson: value); break;
+                case "/profile":
+                    if (value.Length == 0) { Console.WriteLine((await workspace.GetAsync(id, cancellationToken)).UserProfileJson); return true; }
+                    update = new(UserProfileJson: value == "off" ? "{}" : value); break;
                 case "/longterm": update = new(LongTermMemoryJson: value); break;
                 case "/forget-layer":
                     update = value.ToLowerInvariant() switch
@@ -99,7 +102,7 @@ public sealed class WorkspaceCommandHandler(IWorkspaceClient workspace) : IConso
                 case "/prompt": if (value.Length == 0) { Console.WriteLine((await workspace.GetAsync(id, cancellationToken)).SystemPrompt); return true; } update = new(SystemPrompt: value); break;
                 case "/model": if (value.Length == 0) { Console.WriteLine((await workspace.GetAsync(id, cancellationToken)).Model); return true; } update = new(Model: value); break;
                 case "/temperature": if (value.Length == 0) { Console.WriteLine((await workspace.GetAsync(id, cancellationToken)).Temperature); return true; } update = new(Temperature: Number(value)); break;
-                case "/max_tokens": if (value.Length == 0) { Console.WriteLine((await workspace.GetAsync(id, cancellationToken)).MaxTokens); return true; } update = new(MaxTokens: int.Parse(value)); break;
+                case "/max_tokens": if (value.Length == 0) { Console.WriteLine((await workspace.GetAsync(id, cancellationToken)).MaxTokens?.ToString() ?? "Без программного лимита"); return true; } update = value == "off" ? new(ClearMaxTokens: true) : new(MaxTokens: int.Parse(value)); break;
                 case "/top_p": update = new(TopP: Number(value)); break;
                 case "/frequency_penalty": update = new(FrequencyPenalty: Number(value)); break;
                 case "/presence_penalty": update = new(PresencePenalty: Number(value)); break;

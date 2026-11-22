@@ -66,6 +66,40 @@ public static class BenchmarkMaterialsCatalog
             materials.Groups.Add(new("Долговременные facts", "Явно сохранённые знания.", Day11MemoryLayersBenchmark.InitialLongTerm().Select(p => new ExperimentMaterialItem(p.Key, p.Value)).ToList()));
             materials.Groups.Add(new("Контрольные вопросы", "После удаления источника ожидается НЕИЗВЕСТНО.", Day11MemoryLayersBenchmark.Probes.Select(p => new ExperimentMaterialItem(p.Layer, p.Question, p.Value)).ToList()));
         }
+        if (definition.Id == "day12")
+        {
+            materials = materials with
+            {
+                AssignmentSource = "Задание пользователя · DAYS.md, День 12 · копия от 22.11.2026",
+                Assignment = """
+                    День 12. Персонализация ассистента
+
+                    Добавьте персонализацию поверх модели памяти:
+                    - создайте профиль пользователя
+                    - опишите предпочтения (стиль, формат, ограничения)
+                    - подключите профиль к каждому запросу
+                    - сделайте так, чтобы профиль пополнялся из диалога, а не только задавался вручную
+
+                    Проверьте:
+                    - заведите 2–3 профиля с противоположными предпочтениями (кратко / подробно, с кодом / без кода, формально / неформально)
+                    - задайте всем один и тот же вопрос
+                    - посчитайте, в скольких ответах предпочтение реально соблюдено
+
+                    Проверьте устойчивость:
+                    - задайте 10 вопросов подряд в одном профиле
+                    - зафиксируйте, на каком по счёту ответе ассистент начинает игнорировать предпочтения
+
+                    Результат: Персонализированный агент, адаптированный под пользователя
+                    """,
+                Plan = ["Задать два противоположных профиля вручную.", "Пополнить третий профиль из явной реплики пользователя.", "Задать трём профилям один вопрос независимо.", "Задать обученному профилю 10 вопросов подряд с общей историей.", "Посчитать соблюдение трёх предпочтений и первый номер нарушения."]
+            };
+            materials.Groups.Add(new("Профили", "Начальные данные сценария; третий профиль обучается из реплики.",
+                Day12PersonalizationBenchmark.Profiles().Select(p => new ExperimentMaterialItem(p.Name, Day12PersonalizationBenchmark.DescribeProfile(p))).ToList()));
+            materials.Groups.Add(new("Пополнение из диалога", "Эталон задан независимо от результата извлечения модели.",
+                [new("Реплика", Day12PersonalizationBenchmark.LearningText, Day12PersonalizationBenchmark.DescribeProfile(Day12PersonalizationBenchmark.LearnedExpectation()))]));
+            materials.Groups.Add(new("Вопросы", "Один общий вопрос и десять последовательных.",
+                new[] { Day12PersonalizationBenchmark.Question }.Concat(Day12PersonalizationBenchmark.StabilityQuestions).Select((q, i) => new ExperimentMaterialItem(i == 0 ? "Общий вопрос" : $"Устойчивость {i}", q)).ToList()));
+        }
         return materials;
     }
 }

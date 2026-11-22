@@ -112,7 +112,7 @@ public sealed class BenchmarkRunner(BenchmarkRegistry registry, FileRunStore sto
             int number = ++_number;
             var clock = Stopwatch.StartNew();
             string kind = request.Messages.FirstOrDefault()?.Content is { } prompt &&
-                (prompt.StartsWith("Сожми историю", StringComparison.Ordinal) || prompt == UniversalAI.Services.Context.StickyFactsMemory.Instructions)
+                (prompt.StartsWith("Сожми историю", StringComparison.Ordinal) || prompt == UniversalAI.Services.Context.StickyFactsMemory.Instructions || prompt == UniversalAI.Services.Context.UserProfileMemory.Instructions)
                 ? "memory" : "answer";
             await File.AppendAllTextAsync(Path.Combine(directory, "api-requests.jsonl"),
                 JsonSerializer.Serialize(new { number, kind, request }) + "\n", linked.Token);
@@ -142,6 +142,7 @@ public static class BenchmarkRegistration
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day10", "Стратегии памяти", "Окно, facts, summary и независимые ветки", true, HasMemory: true, HasBranches: true), Day10ContextBenchmark.ExecuteAsync));
         services.AddSingleton<IBenchmark>(new DayBenchmark(new("day11", "Слои памяти", "Диалог, задача и долговременные facts: состав промпта, токены и пошаговая очистка", true, ScenarioVersion: Day11MemoryLayersBenchmark.ScenarioVersion), Day11MemoryLayersBenchmark.ExecuteAsync));
         services.AddSingleton<BenchmarkRegistry>();
+        services.AddSingleton<IBenchmark>(new DayBenchmark(new("day12", "Персонализация", "Три противоположных профиля, пополнение из диалога и устойчивость на 10 вопросах", true, ScenarioVersion: Day12PersonalizationBenchmark.ScenarioVersion, ScorerVersion: Day12PersonalizationBenchmark.ScorerVersion), Day12PersonalizationBenchmark.ExecuteAsync));
         services.AddSingleton<FileRunStore>();
         services.AddSingleton<BenchmarkRunner>();
         services.AddSingleton<RunMetricsReader>();

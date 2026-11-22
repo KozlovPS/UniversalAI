@@ -33,6 +33,7 @@ public sealed class HelpCommandHandler : IConsoleCommandHandler
               /temperature 0.7        Изменить температуру (0–2)
               /max_tokens             Показать лимит токенов ответа
               /max_tokens 4096        Установить лимит токенов ответа
+              /max_tokens off         Снять программный лимит ответа
               /top_p 0.9              Установить Top P
               /frequency_penalty 0.5  Установить Frequency Penalty
               /presence_penalty 0.5   Установить Presence Penalty
@@ -69,6 +70,9 @@ public sealed class HelpCommandHandler : IConsoleCommandHandler
               /memory Layered         Выбрать Summary, SlidingWindow, StickyFacts или Layered
               /working {JSON}         Явно сохранить рабочую память (строковые значения)
               /longterm {JSON}        Явно сохранить долговременные facts
+              /profile                Показать профиль предпочтений
+              /profile {JSON}         Сохранить профиль (Name, Length, Code, Tone, Constraints, LearnFromDialogue)
+              /profile off            Удалить профиль
               /layers                 Показать рабочую/долговременную память и размер окна
               /forget-layer short     Очистить слой short, working или long
               /branch НАЗВАНИЕ        Создать и открыть независимую ветку диалога

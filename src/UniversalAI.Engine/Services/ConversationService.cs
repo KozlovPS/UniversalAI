@@ -124,6 +124,17 @@ public class ConversationService : IContextMemoryStore
             }
         }
 
+        if (preparedContext?.PendingProfile is { } profile)
+        {
+            conversation.UserProfileJson = JsonSerializer.Serialize(profile);
+            if (preparedContext.ProfileCall is { } usage)
+            {
+                conversation.ProfilePromptTokens += usage.PromptTokens;
+                conversation.ProfileCompletionTokens += usage.CompletionTokens;
+                conversation.ProfileUsageComplete &= usage.PromptTokens > 0 || usage.CompletionTokens > 0;
+            }
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
     }
@@ -194,6 +205,9 @@ public class ConversationService : IContextMemoryStore
 
         conversation.FactsJson = "{}";
         conversation.WorkingMemoryJson = "{}";
+        conversation.UserProfileJson = "{}";
+        conversation.ProfilePromptTokens = conversation.ProfileCompletionTokens = 0;
+        conversation.ProfileUsageComplete = true;
         conversation.FactsPromptTokens = conversation.FactsCompletionTokens = 0;
         conversation.FactsUsageComplete = true;
         conversation.Title = "Новый диалог";
@@ -378,7 +392,7 @@ public class ConversationService : IContextMemoryStore
             throw new InvalidOperationException("Диалог не найден.");
         }
 
-        conversation.MaxTokens = 10000;
+        conversation.MaxTokens = null;
         conversation.Temperature = 0.7;
         conversation.TopP = null;
         conversation.FrequencyPenalty = null;

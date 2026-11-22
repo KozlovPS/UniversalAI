@@ -23,7 +23,7 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
         return new(c.Id, c.Title, c.Model, c.AgentId, c.ProviderProfileId, c.MemoryStrategy,
             c.CompressionEnabled, c.ContextKeepLastMessages, c.ContextCompressionBatchSize,
             c.Temperature, c.MaxTokens, c.SystemPrompt, c.UpdatedAt, c.FactsJson, summary?.Content,
-            c.TopP, c.FrequencyPenalty, c.PresencePenalty, c.Seed, c.ReasoningEffort, c.ReasoningBudgetTokens, c.WorkingMemoryJson);
+            c.TopP, c.FrequencyPenalty, c.PresencePenalty, c.Seed, c.ReasoningEffort, c.ReasoningBudgetTokens, c.WorkingMemoryJson, c.UserProfileJson);
     }
 
     public Task<IReadOnlyList<ProviderInfo>> ProvidersAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<ProviderInfo>>(
@@ -49,9 +49,9 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
         var summary = await service.GetSummaryAsync(id, ct);
         var conversation = (await service.GetConversationAsync(id))!;
         return new TokenStatistics(TokenUsageCalculator.SummarizeHistory(await service.GetMessagesAsync(id, ct)),
-            (summary?.PromptTokens ?? 0) + conversation.FactsPromptTokens,
-            (summary?.CompletionTokens ?? 0) + conversation.FactsCompletionTokens,
-            (summary?.UsageComplete ?? true) && conversation.FactsUsageComplete);
+            (summary?.PromptTokens ?? 0) + conversation.FactsPromptTokens + conversation.ProfilePromptTokens,
+            (summary?.CompletionTokens ?? 0) + conversation.FactsCompletionTokens + conversation.ProfileCompletionTokens,
+            (summary?.UsageComplete ?? true) && conversation.FactsUsageComplete && conversation.ProfileUsageComplete);
     });
 
     public Task<IReadOnlyList<ConversationInfo>> ListAsync(CancellationToken ct = default) => InScopeAsync(async sp =>
@@ -119,6 +119,8 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
             await using var transaction = await sp.GetRequiredService<AppDbContext>().Database.BeginTransactionAsync(ct);
             if (settings.WorkingMemoryJson != null) c.WorkingMemoryJson = settings.WorkingMemoryJson;
             if (settings.LongTermMemoryJson != null) c.FactsJson = settings.LongTermMemoryJson;
+            if (settings.UserProfileJson != null) c.UserProfileJson = settings.UserProfileJson;
+            if (settings.ClearMaxTokens) c.MaxTokens = null;
             if (settings.ClearShortTerm) await service.ClearShortTermAsync(id, ct);
             if (settings.ResetGeneration) await service.ResetGenerationSettingsAsync(id);
             if (settings.ClearReasoning) { c.ReasoningEffort = null; c.ReasoningBudgetTokens = null; }
@@ -140,6 +142,7 @@ public sealed class WorkspaceService(IServiceScopeFactory scopes, ConversationGa
             throw new ArgumentException("Стратегия: Summary, SlidingWindow, StickyFacts или Layered.");
         if (s.WorkingMemoryJson != null) _ = Context.LayeredMemory.Parse(s.WorkingMemoryJson);
         if (s.LongTermMemoryJson != null) _ = Context.LayeredMemory.Parse(s.LongTermMemoryJson);
+        if (s.UserProfileJson != null) _ = Context.UserProfileMemory.Parse(s.UserProfileJson);
         if (s.Keep is < 2 || s.Batch is < 1 || s.MaxTokens is < 1 ||
             s.Temperature is < 0 or > 2 || s.Temperature.HasValue && !double.IsFinite(s.Temperature.Value))
             throw new ArgumentException("Проверьте параметры генерации и памяти.");

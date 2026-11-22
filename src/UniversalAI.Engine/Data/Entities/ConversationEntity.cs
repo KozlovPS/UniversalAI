@@ -4,7 +4,7 @@ public class ConversationEntity
 
 {
     // Максимальное количество токенов ответа
-    public int MaxTokens { get; set; } = 10000;
+    public int? MaxTokens { get; set; }
 
     // Top P
     public double? TopP { get; set; }
@@ -36,6 +36,10 @@ public class ConversationEntity
     public string MemoryStrategy { get; set; } = "Summary";
     public string FactsJson { get; set; } = "{}";
     public string WorkingMemoryJson { get; set; } = "{}";
+    public string UserProfileJson { get; set; } = "{}";
+    public int ProfilePromptTokens { get; set; }
+    public int ProfileCompletionTokens { get; set; }
+    public bool ProfileUsageComplete { get; set; } = true;
     public int FactsPromptTokens { get; set; }
     public int FactsCompletionTokens { get; set; }
     public bool FactsUsageComplete { get; set; } = true;
